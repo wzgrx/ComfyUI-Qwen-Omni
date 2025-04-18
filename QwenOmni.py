@@ -90,20 +90,6 @@ class LoadQwenOmniModel:
         # 预加载模型到显存
         
         processor = Qwen2_5OmniProcessor.from_pretrained(self.model_path)
-
-         # 新增预热步骤 ▼▼▼
-        with torch.no_grad():
-            warmup_prompt = "generating text and speech"
-            inputs = processor(
-                text=warmup_prompt,
-                return_tensors="pt"
-            ).to(model.device)
-            model.generate(
-                inputs.input_ids,
-                max_new_tokens=1,
-                do_sample=False
-            )
-
         return model, processor
 
 
@@ -123,11 +109,6 @@ class QwenOmniParser:
                     "default": "Describe this image in detail", 
                     "multiline": True
                 }),
-                "system_prompt": ("STRING", {
-                    "default": "generating text",
-                    "multiline": True,
-                    "hidden": True
-                }),
                 "max_tokens": ("INT", {
                     "default": 128, 
                     "min": 32, 
@@ -139,12 +120,11 @@ class QwenOmniParser:
                     "max": 1.0,
                     "step": 0.1
                 }),
-                # 新增音频生成开关
-                "enable_audio": ("BOOLEAN", {"default": True}),
-                "voice_type": ([
-                    "Chelsie",
-                    "Ethan",
-                    ], {"default": "Chelsie"}),
+                "audio_mode": ([
+                    "None (No Audio)", 
+                    "Chelsie (Female)", 
+                    "Ethan (Male)"
+                ], {"default": "None (No Audio)"}),
             }
         }
 
@@ -185,21 +165,18 @@ class QwenOmniParser:
             }
         ]
     @torch.no_grad()
-    def analyze_image(self, model, processor,image, prompt, system_prompt, max_tokens, temperature, enable_audio, voice_type):
+    def analyze_image(self, model, processor,image, prompt, max_tokens, temperature, audio_mode):
         # 转换输入格式
         pil_image = self.tensor_to_pil(image)
-               # 动态替换系统提示 ▼▼▼
-        official_system_prompt = "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."
-        actual_system_prompt = official_system_prompt if enable_audio else system_prompt
+
+        # 定义双系统提示 ▼▼▼
+        DEFAULT_SYSTEM_PROMPT = "AI Assistant"
+        OFFICIAL_AUDIO_PROMPT = "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."
         
-        conversation = self.build_multimodal_inputs(
-            pil_image, 
-            prompt,
-            actual_system_prompt
-        )
-        
-        # # 构建多模态对话
-        # conversation = self.build_multimodal_inputs(pil_image, prompt, system_prompt)
+        # 根据音频开关选择提示词 ▼▼▼
+        system_prompt = OFFICIAL_AUDIO_PROMPT if enable_audio else DEFAULT_SYSTEM_PROMPT
+        # 构建多模态对话
+        conversation = self.build_multimodal_inputs(pil_image, prompt, system_prompt)
         
         # 预处理多模态数据
         text = processor.apply_chat_template(
@@ -209,6 +186,16 @@ class QwenOmniParser:
         )
         audios, images, videos = process_mm_info([conversation], use_audio_in_video=False)
         
+        # 解析音频模式参数 ▼▼▼
+        enable_audio = audio_mode != "None (No Audio)"
+        # 当且仅当 audio_mode 不是 "None..." 时启用音频
+        
+        voice_type = None
+        if "Chelsie" in audio_mode:
+            voice_type = "Chelsie"
+        elif "Ethan" in audio_mode:
+            voice_type = "Ethan"
+
         # 准备模型输入
         inputs = processor(
             text=text,
@@ -224,10 +211,14 @@ class QwenOmniParser:
         "do_sample": False,
         "temperature": temperature,
         "use_cache": True,
-        "past_key_values": None, 
         "return_audio": enable_audio,  # 连接输入参数
-        "speaker": voice_type  # 指定发音人
+        # "speaker": voice_type  # 指定发音人
         }
+
+        # 仅在启用音频时添加发音人参数 ▼▼▼
+        if enable_audio and voice_type:
+            generate_config["speaker"] = voice_type
+
         text_ids, audio = model.generate(**inputs,**generate_config)
         text = processor.batch_decode(text_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         return (text[0], audio)
