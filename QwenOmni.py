@@ -90,6 +90,20 @@ class LoadQwenOmniModel:
         # 预加载模型到显存
         
         processor = Qwen2_5OmniProcessor.from_pretrained(self.model_path)
+
+         # 新增预热步骤 ▼▼▼
+        with torch.no_grad():
+            warmup_prompt = "generating text and speech"
+            inputs = processor(
+                text=warmup_prompt,
+                return_tensors="pt"
+            ).to(model.device)
+            model.generate(
+                inputs.input_ids,
+                max_new_tokens=1,
+                do_sample=False
+            )
+
         return model, processor
 
 
@@ -110,8 +124,9 @@ class QwenOmniParser:
                     "multiline": True
                 }),
                 "system_prompt": ("STRING", {
-                    "default": "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech.",
-                    "multiline": True
+                    "default": "generating text",
+                    "multiline": True,
+                    "hidden": True
                 }),
                 "max_tokens": ("INT", {
                     "default": 128, 
@@ -173,9 +188,18 @@ class QwenOmniParser:
     def analyze_image(self, model, processor,image, prompt, system_prompt, max_tokens, temperature, enable_audio, voice_type):
         # 转换输入格式
         pil_image = self.tensor_to_pil(image)
+               # 动态替换系统提示 ▼▼▼
+        official_system_prompt = "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."
+        actual_system_prompt = official_system_prompt if enable_audio else system_prompt
         
-        # 构建多模态对话
-        conversation = self.build_multimodal_inputs(pil_image, prompt, system_prompt)
+        conversation = self.build_multimodal_inputs(
+            pil_image, 
+            prompt,
+            actual_system_prompt
+        )
+        
+        # # 构建多模态对话
+        # conversation = self.build_multimodal_inputs(pil_image, prompt, system_prompt)
         
         # 预处理多模态数据
         text = processor.apply_chat_template(
@@ -200,6 +224,7 @@ class QwenOmniParser:
         "do_sample": False,
         "temperature": temperature,
         "use_cache": True,
+        "past_key_values": None, 
         "return_audio": enable_audio,  # 连接输入参数
         "speaker": voice_type  # 指定发音人
         }
