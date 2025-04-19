@@ -9,6 +9,8 @@ import folder_paths
 from qwen_omni_utils import process_mm_info
 import numpy as np
 import soundfile as sf
+import re
+import datetime
 import torchaudio
 device = "cuda"
 
@@ -54,7 +56,7 @@ class LoadQwenOmniModel:
         }
 
     RETURN_TYPES = ("QWENOMNI", "OMNIPROCESSOR")
-    RETURN_NAMES = ("Qwen_Omni", "processor")
+    RETURN_NAMES = ("model", "processor")
     FUNCTION = "load_model"
     CATEGORY = "🐼QwenOmni"
   
@@ -82,7 +84,6 @@ class LoadQwenOmniModel:
             low_cpu_mem_usage=True,
             use_safetensors=True,  # 启用更快的safetensors格式
             offload_state_dict=True,  # 优化显存分配
-            # max_memory={0: "14GiB", "cpu": "64GiB"},  # 精确控制显存分配
             enable_audio_output=True
         ).eval()
 
@@ -92,8 +93,8 @@ class LoadQwenOmniModel:
         processor = Qwen2_5OmniProcessor.from_pretrained(self.model_path)
         return model, processor
 
-
 class QwenOmniParser:
+
     def __init__(self):
         self.model = None
         self.processor = None
@@ -121,10 +122,10 @@ class QwenOmniParser:
                     "step": 0.1
                 }),
                 "audio_mode": ([
-                    "None (No Audio)", 
-                    "Chelsie (Female)", 
-                    "Ethan (Male)"
-                ], {"default": "None (No Audio)"}),
+                    "🔇None (No Audio)", 
+                    "👱‍♀️Chelsie (Female)", 
+                    "👨🏻Ethan (Male)"
+                ], {"default": "🔇None (No Audio)"}),
             }
         }
 
@@ -147,82 +148,90 @@ class QwenOmniParser:
             image_np = image_np.astype(np.uint8)
             
         return Image.fromarray(image_np)
-    
 
-    def build_multimodal_inputs(self, pil_image, prompt, system_prompt):
-        """构建多模态输入结构"""
-        return [
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": system_prompt}]
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": pil_image},
-                    {"type": "text", "text": prompt}
-                ]
-            }
-        ]
     @torch.no_grad()
-    def analyze_image(self, model, processor,image, prompt, max_tokens, temperature, audio_mode):
+    def analyze_image(self, model, processor, image, prompt, max_tokens, temperature, audio_mode):
         # 转换输入格式
         pil_image = self.tensor_to_pil(image)
-
-        # 定义双系统提示 ▼▼▼
+        
+        # 定义系统提示常量
         DEFAULT_SYSTEM_PROMPT = "AI Assistant"
         OFFICIAL_AUDIO_PROMPT = "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."
-        
-        # 根据音频开关选择提示词 ▼▼▼
-        system_prompt = OFFICIAL_AUDIO_PROMPT if enable_audio else DEFAULT_SYSTEM_PROMPT
-        # 构建多模态对话
-        conversation = self.build_multimodal_inputs(pil_image, prompt, system_prompt)
-        
-        # 预处理多模态数据
-        text = processor.apply_chat_template(
-            conversation,
-            add_generation_prompt=True,
-            tokenize=False
-        )
-        audios, images, videos = process_mm_info([conversation], use_audio_in_video=False)
-        
-        # 解析音频模式参数 ▼▼▼
-        enable_audio = audio_mode != "None (No Audio)"
-        # 当且仅当 audio_mode 不是 "None..." 时启用音频
-        
-        voice_type = None
-        if "Chelsie" in audio_mode:
-            voice_type = "Chelsie"
-        elif "Ethan" in audio_mode:
-            voice_type = "Ethan"
 
-        # 准备模型输入
-        inputs = processor(
-            text=text,
-            images=images,
-            audio=audios,
-            videos=videos,
-            return_tensors="pt",
-            padding=True
-        ).to(model.device)
-        # # 生成参数配置
-        generate_config = {
-        "max_new_tokens": max_tokens,
-        "do_sample": False,
-        "temperature": temperature,
-        "use_cache": True,
-        "return_audio": enable_audio,  # 连接输入参数
-        # "speaker": voice_type  # 指定发音人
-        }
+        # 解析音频参数
+        enable_audio = audio_mode != "🔇None (No Audio)"
+        voice_type = "Chelsie" if "Chelsie" in audio_mode else "Ethan" if "Ethan" in audio_mode else None
 
-        # 仅在启用音频时添加发音人参数 ▼▼▼
-        if enable_audio and voice_type:
-            generate_config["speaker"] = voice_type
+        # 阶段一：生成核心文本
+        def generate_core_text():
+            conversation = [
+                {"role": "system", "content": [{"type": "text", "text": DEFAULT_SYSTEM_PROMPT}]},
+                {"role": "user", "content": [
+                    {"type": "image", "image": pil_image},
+                    {"type": "text", "text": prompt}
+                ]}
+            ]
+            inputs = processor(
+                text=processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=False), # 关闭自动添加角色提示
+                images=[pil_image],
+                return_tensors="pt",
+                padding=True
+            ).to(model.device)
+            
+            generate_config = {
+                "max_new_tokens": max_tokens,
+                "do_sample": False,
+                "temperature": temperature,
+                "use_cache": True,
+                "return_audio": False
+            }
+            text_ids = model.generate(**inputs, **generate_config)
+            return processor.batch_decode(text_ids, skip_special_tokens=True)[0]
 
-        text_ids, audio = model.generate(**inputs,**generate_config)
-        text = processor.batch_decode(text_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-        return (text[0], audio)
+        # 阶段二：基于文本生成语音
+        def generate_speech(text):
+            conversation = [
+                {"role": "system", "content": [{"type": "text", "text": OFFICIAL_AUDIO_PROMPT}]},
+                {"role": "user", "content": [
+                    {"type": "text", "text": f"<|im_start|>user\n{text}<|im_end|>"}  # ✅ 使用原始文本标记
+                ]}
+            ]
+            inputs = processor(
+                text=processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=False), # 关闭自动添加角色提示
+                return_tensors="pt",
+                padding=True
+            ).to(model.device)
+            
+            # 智能配置生成参数 ▼▼▼
+            generate_config = {
+                "max_new_tokens": len(text.split()) * 3,
+                "do_sample": False,
+                "use_cache": True,
+                "return_audio": True
+            }
+            
+            # 有效性验证后添加发音人参数 ▼▼▼
+            if voice_type in {"Chelsie", "Ethan"}:  # 使用集合加速判断
+                generate_config["speaker"] = voice_type
+            else:
+                print(f"[WARN] 使用模型默认发音人，当前选择: {audio_mode}")
+            
+            _, audio = model.generate(**inputs, **generate_config)
+            return audio
+
+        # 主流程
+        text = generate_core_text()
+        audio = torch.zeros(0)
         
+        if enable_audio:
+            # 二次验证发音人有效性 ▼▼▼
+            if voice_type is None:
+                raise ValueError(f"无效的发音人配置，audio_mode: {audio_mode}")
+            audio = generate_speech(text)
+
+        return (text, audio)
+    
+
 
 class SaveQwenOmniAudio:
     @classmethod
@@ -242,15 +251,36 @@ class SaveQwenOmniAudio:
     def save_audio(self, audio, filename, samplerate):
         # 获取ComfyUI的输出目录
         output_dir = folder_paths.get_output_directory()
+        # 生成日期部分（yyyyMMdd）
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        # 查找当天最新序号
+        existing_files = os.listdir(output_dir)
+        pattern = re.compile(rf"^{date_str}_(\d{{4}})\.wav$")
+        # 提取已有序号并找到最大值
+        max_sequence = 0
+        for filename in existing_files:
+            match = pattern.match(filename)
+            if match:
+                current_seq = int(match.group(1))
+                max_sequence = max(max_sequence, current_seq)
+        
+        # 生成新序号（自动递增）
+        new_sequence = max_sequence + 1
         
         # 确保文件名不包含路径（防止目录注入）
         filename = os.path.basename(filename)
-        
-        # 构建完整保存路径
-        full_path = os.path.join(output_dir, filename)
+        # 构建完整文件名
+        new_filename = f"{date_str}_{new_sequence:04d}.wav"
+        full_path = os.path.join(output_dir, new_filename)
         
         # 创建目录（如果不存在）
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        
+        # # 构建完整保存路径
+        # full_path = os.path.join(output_dir, filename)
+        
+        # # 创建目录（如果不存在）
+        # os.makedirs(output_dir, exist_ok=True)
         
         # 保存音频文件
         sf.write(
@@ -258,7 +288,8 @@ class SaveQwenOmniAudio:
             audio.reshape(-1).detach().cpu().numpy(),
             samplerate=samplerate,
         )
-        return ()
+        # return ()
+        return {"ui": {"audio": [full_path]}}
 
 
 
