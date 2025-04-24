@@ -1,4 +1,4 @@
-# from __future__ import annotations
+from __future__ import annotations
 import torch
 import os
 import tempfile
@@ -17,10 +17,7 @@ import datetime
 import hashlib
 import requests
 import time
-from moviepy.editor import VideoFileClip
-# from moviepy import VideoFileClip
 from .VideoUploader import VideoUploader
-
 
 
 def check_flash_attention():
@@ -96,8 +93,6 @@ def check_model_files_exist(model_dir):
     return True
 
 
-
-
 class LoadQwenOmniModel:
     def __init__(self):
         self.model_path = init_qwen_paths()
@@ -142,8 +137,6 @@ class LoadQwenOmniModel:
 
         # 自定义device_map，这里假设只有一个GPU，将模型尽可能放到GPU上
         device_map = {"": 0} if torch.cuda.device_count() > 0 else "auto"
-
-
 
         # 检查模型文件是否齐全
         if check_model_files_exist(self.model_path):
@@ -194,8 +187,6 @@ class LoadQwenOmniModel:
                 break
             else:
                 raise RuntimeError("从所有源下载模型均失败。")
-
-
 
         model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
             self.model_path,
@@ -251,7 +242,7 @@ class QwenOmniParser:
                                  {
                                      "default": "🎧 Separate Audio Input",
                                      "display": "radio",
-                                     "tooltip":  "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
+                                     "tooltip": "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
                                  }),
                 "max_tokens": ("INT", {
                     "default": 128,
@@ -304,11 +295,10 @@ class QwenOmniParser:
 
     @torch.no_grad()
     def analyze_processor(self, model, processor, prompt, max_tokens, temperature, audio_output, audio_source, top_p,
-                        repetition_penalty, audio=None, video_path=None, image=None):
+                          repetition_penalty, audio=None, video_path=None, image=None):
         pil_image = self.tensor_to_pil(image) if image is not None else None
         audio_path = None
         temp_audio_file = None
-        video_audio_path = None  # 新增：视频提取的音频路径
 
         if audio:
             try:
@@ -321,29 +311,6 @@ class QwenOmniParser:
                 print(f"Error saving audio to temporary file: {e}")
                 audio_path = None
 
-        video = video_path if video_path else None
-        use_video_audio = audio_source == "🎬 Video Built-in Audio"
-
-        # 处理视频内置音频提取（修正后）
-        if use_video_audio and video_path:
-            try:
-                with VideoFileClip(video_path) as clip:
-                    if not clip.audio:  # 检查视频是否有音频轨道
-                        raise RuntimeError("视频文件无音频轨道")
-                    
-                    # 保存为 WAV 格式（模型可能需要特定格式，如 16kHz 单声道）
-                    video_audio_temp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-                    video_audio_path = video_audio_temp.name
-                    # 转换为模型所需的采样率（如 24000Hz，根据 Qwen 模型要求调整）
-                    clip.audio.write_audiofile(video_audio_path, codec="pcm_s16le", fps=24000)  # 显式设置采样率
-            except Exception as e:
-                raise RuntimeError(
-                    "视频音频提取失败，请检查：\n"
-                    "1. 已安装 moviepy（pip install moviepy）和 FFmpeg（添加到系统 PATH）\n"
-                    "2. 视频文件格式为 MP4/AVI 等常见格式，且包含有效音频轨道\n"
-                    f"错误详情: {str(e)}"
-                ) from e
-
         SYSTEM_PROMPT = "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."
 
         conversation = [
@@ -354,14 +321,12 @@ class QwenOmniParser:
         if pil_image is not None:
             conversation[-1]["content"].append({"type": "image", "image": pil_image})
 
-        # 添加音频输入（分离音频或视频提取的音频）
+        # 添加音频/视频输入（直接传递路径，由 qwen-omni-utils 处理）
+        use_video_audio = audio_source == "🎬 Video Built-in Audio"
         if audio_path and not use_video_audio:
             conversation[-1]["content"].append({"type": "audio", "audio": audio_path})
-        elif use_video_audio and video_audio_path:
-            conversation[-1]["content"].append({"type": "audio", "audio": video_audio_path})  # 使用视频提取的音频
-
         if video_path:
-            conversation[-1]["content"].append({"type": "video", "video": video_path})
+            conversation[-1]["content"].append({"type": "video", "video": video_path})  # 直接添加视频路径
 
         user_prompt = prompt if prompt.endswith(("?", ".", "！", "。", "？", "！")) else f"{prompt} "
         conversation[-1]["content"].append({"type": "text", "text": user_prompt})
@@ -377,6 +342,7 @@ class QwenOmniParser:
             "use_audio_in_video": use_video_audio
         }
 
+        # 直接调用 qwen-omni-utils 的多模态处理逻辑
         audios, images, videos = process_mm_info(conversation, use_audio_in_video=use_video_audio)
         processor_args["audio"] = audios
         processor_args["images"] = images
@@ -484,6 +450,6 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "VideoUploader": "Video Uploader🐼",
-    "LoadQwenOmniModel": "Load QwenOmni Model🐼",
-    "QwenOmniParser": "QwenOmni Parser🐼",
+    "LoadQwenOmniModel": "Load Qwen Omni Model🐼",
+    "QwenOmniParser": "Qwen Omni Parser🐼",
 }
