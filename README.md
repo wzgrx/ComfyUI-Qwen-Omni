@@ -1,9 +1,5 @@
 
 
-
-
-
-
 <div align="center">
 
 # ComfyUI-Qwen-Omni 🐼
@@ -24,25 +20,11 @@
 ---
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 **基于 Qwen2.5-Omni-7B 的多模态大型语言模型 ComfyUI 插件**
 
 
 
 🔄 ComfyUI-Qwen-Omni 是首个支持端到端多模态交互的 ComfyUI 插件，实现了文本、图像、音频的无缝联合生成与编辑。无需中间步骤，只需一次操作，即可让模型同时理解并处理多种输入模态，生成连贯的文本描述和语音输出，为 AI 创作提供前所未有的流畅体验。
-
 
 
 这个插件将 Qwen2.5-Omni-7B 多模态大模型集成到 ComfyUI 中，支持文本、图像、音频和视频输入，并能生成文本和语音输出，为您的 AI 创作提供更丰富的交互体验。
@@ -122,11 +104,9 @@
 
 示例：What's the content in the video?
 
-![alt text](image-3.png)
+[![视频演示：语音生成效果](image-3.png)](https://www.youtube.com/watch?v=m6ECETmsKYc)  
+*支持生成自然流畅的语音输出，点击图片观看*--[演示视频](https://www.youtube.com/watch?v=m6ECETmsKYc)
 
-支持生成自然流畅的语音输出
-
-<video controls src="20250426.mp4" title="Title"></video>
 
 ### 多模态输入
 
