@@ -93,9 +93,11 @@ def check_model_files_exist(model_dir):
     return True
 
 
-class LoadQwenOmniModel:
+class QwenOmniCombined:
     def __init__(self):
         self.model_path = init_qwen_paths()
+        self.model = None
+        self.processor = None
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -108,13 +110,65 @@ class LoadQwenOmniModel:
                     "👍 4-bit (VRAM-friendly)",
                     "⚖️ 8-bit (Balanced Precision)",
                     "🚫 None (Original Precision)"
-                ], {"default": "👍 4-bit (VRAM-friendly)"})
+                ], {"default": "👍 4-bit (VRAM-friendly)"}),
+                "prompt": ("STRING", {
+                    "default": "Hi!😽",
+                    "multiline": True
+                }),
+                "audio_output": ([
+                    "🔇None (No Audio)",
+                    "👱‍♀️Chelsie (Female)",
+                    "👨‍🦰Ethan (Male)"
+                ], {"default": "🔇None (No Audio)"}),
+                "audio_source": ([
+                    "🎧 Separate Audio Input",
+                    "🎬 Video Built-in Audio"
+                ],
+                                 {
+                                     "default": "🎧 Separate Audio Input",
+                                     "display": "radio",
+                                     "tooltip": "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
+                                 }),
+                "max_tokens": ("INT", {
+                    "default": 132,
+                    "min": 64,
+                    "max": 2048,
+                    "step": 16,
+                    "display": "slider"
+                }),
+                "temperature": ("FLOAT", {
+                    "default": 0.4,
+                    "min": 0.1,
+                    "max": 1.0,
+                    "step": 0.1,
+                    "display": "slider",
+                    "tooltip": "Higher values result in more random outputs. 0.1 - 0.3 is suitable for generating structured content."
+                }),
+                "top_p": ("FLOAT", {
+                    "default": 0.9,
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.01,
+                    "display": "slider"
+                }),
+                "repetition_penalty": ("FLOAT", {
+                    "default": 1.0,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.01,
+                    "display": "slider"
+                })
+            },
+            "optional": {
+                "image": ("IMAGE",),
+                "audio": ("AUDIO",),
+                "video_path": ("VIDEO_PATH",),
             }
         }
 
-    RETURN_TYPES = ("QWENOMNI", "OMNIPROCESSOR")
-    RETURN_NAMES = ("model", "processor")
-    FUNCTION = "load_model"
+    RETURN_TYPES = ("STRING", "AUDIO")
+    RETURN_NAMES = ("text", "audio")
+    FUNCTION = "process"
     CATEGORY = "🐼QwenOmni"
 
     def load_model(self, model_name, quantization):
@@ -188,7 +242,7 @@ class LoadQwenOmniModel:
             else:
                 raise RuntimeError("从所有源下载模型均失败。")
 
-        model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
+        self.model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
             self.model_path,
             device_map=device_map,
             torch_dtype=torch.float16,
@@ -202,90 +256,13 @@ class LoadQwenOmniModel:
 
         # ✅ 编译优化（PyTorch 2.2+）
         if torch.__version__ >= "2.2":
-            model = torch.compile(model, mode="reduce-overhead")
+            self.model = torch.compile(self.model, mode="reduce-overhead")
 
         # ✅ SDP优化（推荐）
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(True)
 
-        # 预加载模型到显存
-
-        processor = Qwen2_5OmniProcessor.from_pretrained(self.model_path)
-        return model, processor
-
-
-class QwenOmniParser:
-
-    def __init__(self):
-        self.model = None
-        self.processor = None
-
-    @classmethod
-    def INPUT_TYPES(self):
-        return {
-            "required": {
-                "model": ("QWENOMNI",),
-                "processor": ("OMNIPROCESSOR",),
-                "prompt": ("STRING", {
-                    "default": "Hi!😽",
-                    "multiline": True
-                }),
-                "audio_output": ([
-                    "🔇None (No Audio)",
-                    "👱‍♀️Chelsie (Female)",
-                    "👨‍🦰Ethan (Male)"
-                ], {"default": "🔇None (No Audio)"}),
-                "audio_source": ([
-                    "🎧 Separate Audio Input",
-                    "🎬 Video Built-in Audio"
-                ],
-                                 {
-                                     "default": "🎧 Separate Audio Input",
-                                     "display": "radio",
-                                     "tooltip": "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
-                                 }),
-                "max_tokens": ("INT", {
-                    "default": 128,
-                    "min": 4,
-                    "max": 2048,
-                    "step": 16,
-                    "display": "slider"
-                }),
-                "temperature": ("FLOAT", {
-                    "default": 0.7,
-                    "min": 0.1,
-                    "max": 1.0,
-                    "step": 0.1,
-                    "display": "slider",
-                    "tooltip": "Higher values result in more random outputs. 0.1 - 0.3 is suitable for generating structured content."
-                }),
-                "top_p": ("FLOAT", {
-                    "default": 0.9,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.01,
-                    "display": "slider"
-                }),
-                "repetition_penalty": ("FLOAT", {
-                    "default": 1.0,
-                    "min": 0.0,
-                    "max": 2.0,
-                    "step": 0.01,
-                    "display": "slider"
-                })
-            },
-            "optional": {
-                "image": ("IMAGE",),
-                "audio": ("AUDIO",),
-                "video_path": ("VIDEO_PATH",),
-            }
-
-        }
-
-    RETURN_TYPES = ("STRING", "AUDIO")
-    RETURN_NAMES = ("text", "audio")
-    FUNCTION = "analyze_processor"
-    CATEGORY = "🐼QwenOmni"
+        self.processor = Qwen2_5OmniProcessor.from_pretrained(self.model_path)
 
     def tensor_to_pil(self, image_tensor):
         if image_tensor.dim() == 4:
@@ -294,8 +271,11 @@ class QwenOmniParser:
         return Image.fromarray(image_np)
 
     @torch.no_grad()
-    def analyze_processor(self, model, processor, prompt, max_tokens, temperature, audio_output, audio_source, top_p,
-                          repetition_penalty, audio=None, video_path=None, image=None):
+    def process(self, model_name, quantization, prompt, audio_output, audio_source, max_tokens, temperature, top_p,
+                repetition_penalty, audio=None, image=None, video_path=None):
+        if self.model is None or self.processor is None:
+            self.load_model(model_name, quantization)
+
         pil_image = self.tensor_to_pil(image) if image is not None else None
         audio_path = None
         temp_audio_file = None
@@ -331,8 +311,8 @@ class QwenOmniParser:
         user_prompt = prompt if prompt.endswith(("?", ".", "！", "。", "？", "！")) else f"{prompt} "
         conversation[-1]["content"].append({"type": "text", "text": user_prompt})
 
-        input_text = processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
-        input_ids = processor.tokenizer(input_text, return_tensors="pt", padding=True)["input_ids"].to(model.device)
+        input_text = self.processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
+        input_ids = self.processor.tokenizer(input_text, return_tensors="pt", padding=True)["input_ids"].to(self.model.device)
         input_length = input_ids.shape[1]
 
         processor_args = {
@@ -348,7 +328,7 @@ class QwenOmniParser:
         processor_args["images"] = images
         processor_args["videos"] = videos
 
-        inputs = processor(**processor_args).to(model.device)
+        inputs = self.processor(**processor_args).to(self.model.device)
 
         generate_config = {
             "max_new_tokens": max_tokens,
@@ -359,14 +339,15 @@ class QwenOmniParser:
             "use_audio_in_video": use_video_audio,
             "top_p": top_p,
             "repetition_penalty": repetition_penalty,
-            "eos_token_id": processor.tokenizer.eos_token_id,
-            "pad_token_id": processor.tokenizer.pad_token_id
+            "eos_token_id": self.processor.tokenizer.eos_token_id,
+            "pad_token_id": self.processor.tokenizer.pad_token_id,
+            "flash_attn": True                 # 显式启用 Flash Attention（如有参数）
         }
 
         if generate_config["return_audio"]:
             generate_config["speaker"] = "Chelsie" if "Chelsie" in audio_output else "Ethan"
 
-        outputs = model.generate(**inputs, **generate_config)
+        outputs = self.model.generate(**inputs, **generate_config)
 
         # 统一批次维度，确保文本token是二维张量
         if generate_config["return_audio"]:
@@ -374,26 +355,14 @@ class QwenOmniParser:
             audio_tensor = outputs[1]
         else:
             text_tokens = outputs if outputs.dim() == 2 else outputs.unsqueeze(0)
-            audio_tensor = torch.zeros(0, 0, device=model.device)
+            audio_tensor = torch.zeros(0, 0, device=self.model.device)
 
-        # 严格截断输入提示，仅保留生成部分
-        generated_ids = text_tokens[:, input_length:]
-
-        text = processor.tokenizer.batch_decode(
-            generated_ids,
+        # 直接获取完整的生成文本
+        text = self.processor.tokenizer.batch_decode(
+            text_tokens,
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True
         )[0].strip()
-
-        # 去除生成提示符和用户prompt
-        prefixes_to_remove = ["assistant", "ASSISTANT", "assistant:", "ASSISTANT:"]
-        for prefix in prefixes_to_remove:
-            if text.lower().startswith(prefix.lower()):
-                text = text[len(prefix):].lstrip(" :\t\n")
-                break
-        user_prompt_clean = prompt.strip()
-        if text.startswith(user_prompt_clean):
-            text = text[len(user_prompt_clean):].strip()
 
         # 删除临时文件
         if temp_audio_file:
@@ -401,7 +370,7 @@ class QwenOmniParser:
                 os.remove(temp_audio_file.name)
             except Exception as e:
                 print(f"Error deleting temporary audio file: {e}")
-        if use_video_audio and video_audio_path:
+        if use_video_audio and 'video_audio_path' in locals():
             try:
                 os.remove(video_audio_path)
             except Exception as e:
@@ -411,11 +380,11 @@ class QwenOmniParser:
         if generate_config["return_audio"]:
             audio = audio_tensor
             if isinstance(audio, np.ndarray):
-                audio = torch.from_numpy(audio).to(model.device)
+                audio = torch.from_numpy(audio).to(self.model.device)
             if audio.dim() == 1:
                 audio = audio.unsqueeze(0)
         else:
-            audio = torch.zeros(0, 0, device=model.device)
+            audio = torch.zeros(0, 0, device=self.model.device)
 
         if audio.dim() == 3:
             audio = audio.mean(dim=1)
@@ -444,12 +413,11 @@ class QwenOmniParser:
 
 NODE_CLASS_MAPPINGS = {
     "VideoUploader": VideoUploader,
-    "LoadQwenOmniModel": LoadQwenOmniModel,
-    "QwenOmniParser": QwenOmniParser,
+    "QwenOmniCombined": QwenOmniCombined
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "VideoUploader": "Video Uploader🐼",
-    "LoadQwenOmniModel": "Load Qwen Omni Model🐼",
-    "QwenOmniParser": "Qwen Omni Parser🐼",
+    "QwenOmniCombined": "Qwen Omni Combined🐼"
 }
+    
