@@ -10,12 +10,12 @@
 
 [![Star History](https://img.shields.io/github/stars/SXQBW/ComfyUI-Qwen-Omni?style=for-the-badge&logo=starship&color=FE428E&labelColor=0D1117)](https://github.com/SXQBW/ComfyUI-Qwen-Omni/stargazers)
 [![Model Download](https://img.shields.io/badge/Model_Download-6DB33F?style=for-the-badge&logo=ipfs&logoColor=white)](https://huggingface.co/Qwen/Qwen2.5-Omni-7B)
-
+</div>
 <div align="center">
   <img src="image-1.png" width="90%">
 </div>
 
-</div>
+
 
 ---
 
@@ -110,6 +110,9 @@
 <div style="overflow:hidden; padding:56.25% 0 0 0; position:relative;">
   <iframe src="https://www.youtube.com/watch?v=m6ECETmsKYc" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen></iframe>
 </div>
+
+
+
 
 *支持生成自然流畅的语音输出，点击观看*--[演示视频](https://www.youtube.com/watch?v=m6ECETmsKYc)
 
