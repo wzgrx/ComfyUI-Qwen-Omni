@@ -4,7 +4,7 @@ import os
 import tempfile
 import io
 import torchaudio
-from transformers import Qwen2_5OmniForConditionalGeneration, Qwen2_5OmniProcessor, AutoTokenizer, BitsAndBytesConfig
+from transformers import Qwen2_5OmniForConditionalGeneration, AutoProcessor, AutoTokenizer, BitsAndBytesConfig
 from huggingface_hub import snapshot_download
 from modelscope.hub.snapshot_download import snapshot_download as modelscope_snapshot_download
 from PIL import Image
@@ -13,8 +13,6 @@ import folder_paths
 from qwen_omni_utils import process_mm_info
 import numpy as np
 import soundfile as sf
-import datetime
-import hashlib
 import requests
 import time
 from .VideoUploader import VideoUploader
@@ -93,83 +91,137 @@ def check_model_files_exist(model_dir):
     return True
 
 
+
 class QwenOmniCombined:
     def __init__(self):
         self.model_path = init_qwen_paths()
         self.model = None
         self.processor = None
+        self.tokenizer = None
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_name": ([
-                    "Qwen2.5-Omni-7B",
-                ], {"default": "Qwen2.5-Omni-7B"}),
-                "quantization": ([
-                    "👍 4-bit (VRAM-friendly)",
-                    "⚖️ 8-bit (Balanced Precision)",
-                    "🚫 None (Original Precision)"
-                ], {"default": "👍 4-bit (VRAM-friendly)"}),
-                "prompt": ("STRING", {
-                    "default": "Hi!😽",
-                    "multiline": True
-                }),
-                "audio_output": ([
-                    "🔇None (No Audio)",
-                    "👱‍♀️Chelsie (Female)",
-                    "👨‍🦰Ethan (Male)"
-                ], {"default": "🔇None (No Audio)"}),
-                "audio_source": ([
-                    "🎧 Separate Audio Input",
-                    "🎬 Video Built-in Audio"
-                ],
-                                 {
-                                     "default": "🎧 Separate Audio Input",
-                                     "display": "radio",
-                                     "tooltip": "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
-                                 }),
-                "max_tokens": ("INT", {
-                    "default": 132,
-                    "min": 64,
-                    "max": 2048,
-                    "step": 16,
-                    "display": "slider"
-                }),
-                "temperature": ("FLOAT", {
-                    "default": 0.4,
-                    "min": 0.1,
-                    "max": 1.0,
-                    "step": 0.1,
-                    "display": "slider",
-                    "tooltip": "Higher values result in more random outputs. 0.1 - 0.3 is suitable for generating structured content."
-                }),
-                "top_p": ("FLOAT", {
-                    "default": 0.9,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.01,
-                    "display": "slider"
-                }),
-                "repetition_penalty": ("FLOAT", {
-                    "default": 1.0,
-                    "min": 0.0,
-                    "max": 2.0,
-                    "step": 0.01,
-                    "display": "slider"
-                })
+                "model_name": (
+                    ["Qwen2.5-Omni-7B"],
+                    {
+                        "default": "Qwen2.5-Omni-7B",
+                        "tooltip": "Select the available model version. Currently, only the Qwen2.5-Omni-7B multimodal large model is supported."
+                    }
+                ),
+                "quantization": (
+                    [
+                        "👍 4-bit (VRAM-friendly)",
+                        "⚖️ 8-bit (Balanced Precision)",
+                        "🚫 None (Original Precision)"
+                    ],
+                    {
+                        "default": "👍 4-bit (VRAM-friendly)",
+                        "tooltip": "Select the quantization level:\n✅ 4-bit: Significantly reduces VRAM usage, suitable for resource-constrained environments.\n⚖️ 8-bit: Strikes a balance between precision and performance.\n🚫 None: Uses the original floating-point precision (requires a high-end GPU)."
+                    }
+                ),
+                "prompt": (
+                    "STRING",
+                    {
+                        "default": "Hi!😽",
+                        "multiline": True,
+                        "tooltip": "Enter a text prompt, supporting Chinese and emojis. Example: 'Describe a cat in a painter's style.'"
+                    }
+                ),
+                "audio_output": (
+                    [
+                        "🔇None (No Audio)",
+                        "👱‍♀️Chelsie (Female)",
+                        "👨‍🦰Ethan (Male)"
+                    ],
+                    {
+                        "default": "🔇None (No Audio)",
+                        "tooltip": "Audio output options:\n🔇 Do not generate audio.\n👱‍♀️ Use the female voice Chelsie (warm tone).\n👨‍🦰 Use the male voice Ethan (calm tone)."
+                    }
+                ),
+                "audio_source": (
+                    [
+                        "🎧 Separate Audio Input",
+                        "🎬 Video Built-in Audio"
+                    ],
+                    {
+                        "default": "🎧 Separate Audio Input",
+                        "display": "radio",
+                        "tooltip": "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
+                    }
+                ),
+                "max_tokens": (
+                    "INT",
+                    {
+                        "default": 132,
+                        "min": 64,
+                        "max": 2048,
+                        "step": 16,
+                        "display": "slider",
+                        "tooltip": "Control the maximum length of the generated text (in tokens). \nGenerally, 100 tokens correspond to approximately 50 - 100 Chinese characters or 67 - 100 English words, but the actual number may vary depending on the text content and the model's tokenization strategy. \nRecommended range: 64 - 512."
+                    }
+                ),
+                "temperature": (
+                    "FLOAT",
+                    {
+                        "default": 0.4,
+                        "min": 0.1,
+                        "max": 1.0,
+                        "step": 0.1,
+                        "display": "slider",
+                        "tooltip": "Control the generation diversity:\n▫️ 0.1 - 0.3: Generate structured/technical content.\n▫️ 0.5 - 0.7: Balance creativity and logic.\n▫️ 0.8 - 1.0: High degree of freedom (may produce incoherent content)."
+                    }
+                ),
+                "top_p": (
+                    "FLOAT",
+                    {
+                        "default": 0.9,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "display": "slider",
+                        "tooltip": "Nucleus sampling threshold:\n▪️ Close to 1.0: Retain more candidate words (more random).\n▪️ 0.5 - 0.8: Balance quality and diversity.\n▪️ Below 0.3: Generate more conservative content."
+                    }
+                ),
+                "repetition_penalty": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 2.0,
+                        "step": 0.01,
+                        "display": "slider",
+                        "tooltip": "Control of repeated content:\n⚠️ 1.0: Default behavior.\n⚠️ >1.0 (Recommended 1.2): Suppress repeated phrases.\n⚠️ <1.0 (Recommended 0.8): Encourage repeated emphasis."
+                    }
+                )
             },
             "optional": {
-                "image": ("IMAGE",),
-                "audio": ("AUDIO",),
-                "video_path": ("VIDEO_PATH",),
+                "image": (
+                    "IMAGE",
+                    {
+                        "tooltip": "Upload a reference image (supports PNG/JPG), and the model will adjust the generation result based on the image content."
+                    }
+                ),
+                "audio": (
+                    "AUDIO",
+                    {
+                        "tooltip": "Upload an audio file (supports MP3/WAV), and the model will analyze the audio content and generate relevant responses."
+                    }
+                ),
+                "video_path": (
+                    "VIDEO_PATH",
+                    {
+                        "tooltip": "Enter the video file  (supports MP4/WEBM), and the model will extract visual features to assist in generation."
+                    }
+                )
             }
         }
 
     RETURN_TYPES = ("STRING", "AUDIO")
     RETURN_NAMES = ("text", "audio")
     FUNCTION = "process"
-    CATEGORY = "🐼QwenOmni"
+    CATEGORY = "🐼QwenOmni"    
 
     def load_model(self, model_name, quantization):
         # 添加CUDA可用性检查
@@ -262,7 +314,8 @@ class QwenOmniCombined:
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(True)
 
-        self.processor = Qwen2_5OmniProcessor.from_pretrained(self.model_path)
+        self.processor = AutoProcessor.from_pretrained(self.model_path, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
 
     def tensor_to_pil(self, image_tensor):
         if image_tensor.dim() == 4:
@@ -276,7 +329,16 @@ class QwenOmniCombined:
         if self.model is None or self.processor is None:
             self.load_model(model_name, quantization)
 
-        pil_image = self.tensor_to_pil(image) if image is not None else None
+        pil_image = None
+        if image is not None:
+            pil_image = self.tensor_to_pil(image)
+            max_res = 1024
+            if max(pil_image.size) > max_res:
+                pil_image.thumbnail((max_res, max_res))
+                pil_image = np.array(pil_image)
+                pil_image = torch.from_numpy(pil_image).permute(2, 0, 1).unsqueeze(0) / 255.0
+                pil_image = Image.fromarray((pil_image.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
+
         audio_path = None
         temp_audio_file = None
 
@@ -312,8 +374,6 @@ class QwenOmniCombined:
         conversation[-1]["content"].append({"type": "text", "text": user_prompt})
 
         input_text = self.processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
-        input_ids = self.processor.tokenizer(input_text, return_tensors="pt", padding=True)["input_ids"].to(self.model.device)
-        input_length = input_ids.shape[1]
 
         processor_args = {
             "text": input_text,
@@ -329,9 +389,15 @@ class QwenOmniCombined:
         processor_args["videos"] = videos
 
         inputs = self.processor(**processor_args).to(self.model.device)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_inputs = {
+            k: v.to(self.device)
+            for k, v in inputs.items()
+            if v is not None
+        }
 
         generate_config = {
-            "max_new_tokens": max_tokens,
+            "max_new_tokens": max(max_tokens, 10),
             "temperature": temperature,
             "do_sample": True,
             "use_cache": True,
@@ -339,15 +405,14 @@ class QwenOmniCombined:
             "use_audio_in_video": use_video_audio,
             "top_p": top_p,
             "repetition_penalty": repetition_penalty,
-            "eos_token_id": self.processor.tokenizer.eos_token_id,
-            "pad_token_id": self.processor.tokenizer.pad_token_id,
-            "flash_attn": True                 # 显式启用 Flash Attention（如有参数）
+            "eos_token_id": self.tokenizer.eos_token_id,
+            "pad_token_id": self.tokenizer.pad_token_id,
         }
 
         if generate_config["return_audio"]:
             generate_config["speaker"] = "Chelsie" if "Chelsie" in audio_output else "Ethan"
 
-        outputs = self.model.generate(**inputs, **generate_config)
+        outputs = self.model.generate(**model_inputs, **generate_config)
 
         # 统一批次维度，确保文本token是二维张量
         if generate_config["return_audio"]:
@@ -357,12 +422,16 @@ class QwenOmniCombined:
             text_tokens = outputs if outputs.dim() == 2 else outputs.unsqueeze(0)
             audio_tensor = torch.zeros(0, 0, device=self.model.device)
 
+        # 关键修正：对 text_tokens 进行 token 切片处理
+        input_length = model_inputs["input_ids"].shape[1]
+        text_tokens = text_tokens[:, input_length:]  # 截取新生成的token
+
         # 直接获取完整的生成文本
-        text = self.processor.tokenizer.batch_decode(
-            text_tokens,
+        text = self.tokenizer.decode(
+            text_tokens[0],  # 使用正确的变量
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True
-        )[0].strip()
+        )
 
         # 删除临时文件
         if temp_audio_file:
@@ -408,7 +477,10 @@ class QwenOmniCombined:
         del outputs
         torch.cuda.empty_cache()
 
-        return (text, audio_output_data)
+        return (text.strip(), audio_output_data)
+
+
+
 
 
 NODE_CLASS_MAPPINGS = {
