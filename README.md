@@ -126,7 +126,7 @@
 
 支持生成自然流畅的语音输出
 
-<video controls src="4月26日.mp4" title="Title"></video>
+<video controls src="20250426.mp4" title="Title"></video>
 
 ### 多模态输入
 
