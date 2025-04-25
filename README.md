@@ -104,8 +104,14 @@
 
 示例：What's the content in the video?
 
-[![视频演示：语音生成效果](image-3.png)](https://www.youtube.com/watch?v=m6ECETmsKYc)  
-*支持生成自然流畅的语音输出，点击图片观看*--[演示视频](https://www.youtube.com/watch?v=m6ECETmsKYc)
+![视频演示：语音生成效果](image-3.png)
+
+
+<div style="overflow:hidden; padding:56.25% 0 0 0; position:relative;">
+  <iframe src="https://www.youtube.com/watch?v=m6ECETmsKYc" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen></iframe>
+</div>
+
+*支持生成自然流畅的语音输出，点击观看*--[演示视频](https://www.youtube.com/watch?v=m6ECETmsKYc)
 
 
 ### 多模态输入
