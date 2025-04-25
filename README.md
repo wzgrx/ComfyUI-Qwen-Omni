@@ -1,12 +1,47 @@
 
+
+
+
+
+
+<div align="center">
+
 # ComfyUI-Qwen-Omni 🐼
+
+**当 Figma 遇上 VSCode，艺术思维碰撞工程逻辑 —— 这是设计师向代码世界发出的浪漫宣言。**  
+✨ 基于 Qwen2.5-Omni-7B 的多模态革命性插件 ✨
+  
+
+[![Star History](https://img.shields.io/github/stars/SXQBW/ComfyUI-Qwen-Omni?style=for-the-badge&logo=starship&color=FE428E&labelColor=0D1117)](https://github.com/SXQBW/ComfyUI-Qwen-Omni/stargazers)
+[![Model Download](https://img.shields.io/badge/Model_Download-6DB33F?style=for-the-badge&logo=ipfs&logoColor=white)](https://huggingface.co/Qwen/Qwen2.5-Omni-7B)
+
+<div align="center">
+  <img src="image-1.png" width="90%">
+</div>
+
+</div>
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 **基于 Qwen2.5-Omni-7B 的多模态大型语言模型 ComfyUI 插件**
 
 
 
-🔄 端到端多模态交互
-ComfyUI-Qwen-Omni 是首个支持端到端多模态交互的 ComfyUI 插件，实现了文本、图像、音频的无缝联合生成与编辑。无需中间步骤，只需一次操作，即可让模型同时理解并处理多种输入模态，生成连贯的文本描述和语音输出，为 AI 创作提供前所未有的流畅体验。
+🔄 ComfyUI-Qwen-Omni 是首个支持端到端多模态交互的 ComfyUI 插件，实现了文本、图像、音频的无缝联合生成与编辑。无需中间步骤，只需一次操作，即可让模型同时理解并处理多种输入模态，生成连贯的文本描述和语音输出，为 AI 创作提供前所未有的流畅体验。
 
 
 
@@ -28,7 +63,7 @@ ComfyUI-Qwen-Omni 是首个支持端到端多模态交互的 ComfyUI 插件，�
 
    ```bash
    cd ComfyUI/custom_nodes/
-   git clone https://github.com/yourusername/ComfyUI-Qwen-Omni.git
+   git clone https://github.com/SXQBW/ComfyUI-Qwen-Omni.git
    cd ComfyUI-Qwen-Omni
    pip install -r requirements.txt
    ```
@@ -36,6 +71,19 @@ ComfyUI-Qwen-Omni 是首个支持端到端多模态交互的 ComfyUI 插件，�
 2. **下载模型文件**：
 
    插件会在首次运行时自动下载 Qwen2.5-Omni-7B 模型，或您也可以提前手动下载并放置到 `ComfyUI/models/Qwen/Qwen2.5-Omni-7B/` 目录下。
+
+   📦 模型下载地址：
+
+    <p align="left">
+    🤗 <a href="https://huggingface.co/Qwen/Qwen2.5-Omni-7B">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/models/Qwen/Qwen2.5-Omni-7B">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp</a>
+    </p>
+
+    > 另外我在夸克网盘和百度网盘也上传了模型文件（希望能帮到你 💖）
+
+    <p align="left">
+        ⬇ <a href="https://pan.quark.cn/s/fdc4f7a1a5f2">Quark Netdisk</a>&nbsp&nbsp · &nbsp&nbsp<a href="https://pan.baidu.com/s/1Ejpi5fvI6_m1t1WSqWom8A?pwd=xvzf">Baidu Netdisk</a>&nbsp&nbsp</a>
+    </p>
+
 
 
 ## 📖 使用指南
@@ -62,100 +110,116 @@ ComfyUI-Qwen-Omni 是首个支持端到端多模态交互的 ComfyUI 插件，�
 | `audio_output`     | 语音输出选项：不生成语音、女声（Chelsie）或男声（Ethan）。               |
 
 
-## 💡 使用示例
+💡 我已经在节点界面加上了tips，鼠标悬浮到相应位置即可看到说明。
 
-### 图像描述生成
-1. 输入图像
-2. 文本提示："Describe this image in detail"
-3. 输出详细的图像描述文本
+![alt text](20250426-015450.gif)
+
+
+## 👀 功能示例
+*在 ComfyUI 中的使用界面示例*
 
 ### 视频内容分析
-1. 输入视频
-2. 文本提示："What's happening in this video?"
-3. 输出视频内容的文字描述和分析
+
+示例：What's the content in the video?
+
+![alt text](image-3.png)
+
+支持生成自然流畅的语音输出
+
+<video controls src="4月26日.mp4" title="Title"></video>
+
+### 多模态输入
+
+示例：Craft an imaginative story that blends sounds, moving images, and still visuals into a unified plot .
 
 
-## ⚙️ 技术细节
+![Qwen Omni in ComfyUI](image-1.png)
 
-- **模型**：Qwen2.5-Omni-7B
-- **框架**：基于 Transformers 库
-- **优化**：支持 Flash Attention 2 加速
-- **显存要求**：4-bit 量化下约需 10GB GPU 显存
+### 图像描述生成
+
+示例：Just tell me the answers to the questions in the picture directly.
+
+![alt text](image-2.png)
+
+
+
+## 🙏 致谢
+
+<br>衷心感谢以下团队和项目对 ComfyUI-Qwen-Omni 开发的支持与贡献  **请给他们的项目点⭐️**：</br>
+
+
+
+
+- **Qwen 团队（阿里巴巴集团）**  
+  感谢 Qwen-Omni 系列模型的开发者，特别是 **Qwen2.5-Omni-7B** 模型的开源贡献。  
+  他们在多模态大模型领域的突破性工作，为插件提供了强大的底层能力支持。 
+  - [Qwen2.5-Omni 官方项目](https://github.com/QwenLM/Qwen2.5-Omni) 
+  - [Qwen 官方项目](https://github.com/QwenLM)
+
+- **豆包团队（字节跳动）与   混元团队（腾讯）**  
+  在插件开发过程中，豆包 AI 在代码调试、文档生成和问题排查中提供了重要帮助，极大提升了开发效率。  
+  - [豆包官网](https://doubao.com) 
+  - [混元官网](https://hunyuan.tencent.com/)
+
+
+- **ComfyUI 社区**  
+  ComfyUI 灵活的节点化架构为插件开发提供了理想的生态环境。  
+  - [ComfyUI 项目](https://github.com/comfyanonymous/ComfyUI)
+
+
+
+
+## 🌌 从设计到代码的奇幻漂流
+
+2周前，我的武器库还只有Adobe全家桶和Figma源文件。  
+作为全链路设计师（花了10年从UI->UX->PM升级为全能战士），我曾以为这辈子最大的挑战是说服甲方爸爸放弃「五彩斑斓的黑」。直到那个宿命般的深夜——当我第127次对着糟糕的API文档设计稿抓狂时，一个疯狂的念头破土而出：
+
+**「为什么不让设计师自己来写代码？」**
+
+于是，这个充满温度的项目诞生于：
+- 🎨 艺术生的审美强迫症
+- 💻 纯手工打造的Python初号机（是的，连pip都现学现卖）
+- ⚡️ 对体验细节的极致苛求（虽然目前只能实现30%的设计构想）
+
+![alt text](20250426-020032UED.gif)
+
+### 🚧 当前能力边界
+- 能流畅输出设计系统，但还在和异步IO较劲
+- 精通交互原型，但面对递归函数依然瑟瑟发抖
+- 可手绘精美架构图，但实际代码量还没超过500行
+
+### 🌟 你的星星有多重要？
+每个⭐️都是：
+- 照亮设计者转型之路的灯塔
+- 鞭策我攻克下个技术难关的代码之鞭
+- 对「破圈者」最优雅的致敬（这可比Dribbble点赞酷多了！）
+
+> "每个commit都是我与旧世界的决裂书" —— 那个在VSCode里笨拙敲击的设计师
+
+**此刻，你指尖的星星✨**  
+不仅是认可，更是设计思维与代码世界碰撞的宇宙大爆炸。当艺术生的美学执念遇上程序员的极客精神——这可能是GitHub上最浪漫的化学反应。
+
+[点击Star见证跨界革命](https://github.com/SXQBW/ComfyUI-Qwen-Omni)
 
 
 ## 🤝 贡献
 
 欢迎贡献代码、报告问题或提出建议！请提交 Pull Request 或创建 Issue。
 
-
-## 📜 许可证
-
-本项目采用 [MIT 许可证](LICENSE)。
-
-
-## 👀 预览图
-
-![Qwen Omni in ComfyUI](https://picsum.photos/800/450)
-
-*插件在 ComfyUI 中的使用界面示例*
-
-
-## 📧 联系我
-
-如有问题或建议，请创建 GitHub Issue 或联系我：[503887319@qq.com](mailto:503887319@qq.com)
-
-
-贡献指南 🤝
-我们欢迎以下形式的贡献：
+欢迎以下形式的贡献：
 
 ✨ 新功能提案
 🐛 问题报告（请包含复现步骤和日志）
 📝 功能改进
 🖼️ 示例工作流
 
----
-
-以下是为您的项目 README 添加的 **致谢部分**，您可以将其放在合适的位置（建议在“特性亮点”或“技术细节”之后）：
+如有其它问题或建议，联系我：[503887319@qq.com](mailto:503887319@qq.com)
 
 
-## 🙏 致谢
-
-我们衷心感谢以下团队和项目对 ComfyUI-Qwen-Omni 开发的支持与贡献：
-
-### 🌟 核心技术支持
-- **Qwen 团队（阿里巴巴集团）**  
-  感谢 Qwen-Omni 系列模型的开发者，特别是 **Qwen2.5-Omni-7B** 模型的开源贡献。  
-  他们在多模态大模型领域的突破性工作，为插件提供了强大的底层能力支持。  
-  [Qwen 官方项目](https://github.com/QwenLM)
-
-- **豆包团队（字节跳动）**  
-  在插件开发过程中，豆包 AI 在代码调试、文档生成和问题排查中提供了重要帮助，极大提升了开发效率。  
-  [豆包官网](https://doubao.com)
-
-### 🛠️ 工具与框架
-- **Hugging Face Transformers**  
-  感谢其提供的高效模型加载与处理工具，简化了多模态集成流程。  
-  [Hugging Face Transformers](https://github.com/huggingface/transformers)
-
-- **ComfyUI 社区**  
-  ComfyUI 灵活的节点化架构为插件开发提供了理想的生态环境。  
-  [ComfyUI 项目](https://github.com/comfyanonymous/ComfyUI)
-
-### 👥 开源精神
-感谢所有开源社区的贡献者，正是你们的分享让技术进步成为可能。  
-如果您在使用中发现问题或有改进建议，欢迎通过 GitHub Issue 与我们交流！
 
 
-### 如何引用我们
-如果您在研究或项目中使用了 ComfyUI-Qwen-Omni，欢迎在 README 或论文中引用我们：
 
 
-@software{ComfyUI-Qwen-Omni,
-  author = {Xiong Song},
-  title = {ComfyUI-Qwen-Omni: End-to-End Multimodal Plugin for ComfyUI},
-  url = {https://github.com/SXQBW/ComfyUI-Qwen-Omni},
-  version = {0.1.0},
-  year = {2025}
-}
 
-这样的致谢既表达了对核心团队的感谢，也突出了项目的技术依赖和开源生态，同时引导用户正确引用项目。记得将 `yourusername` 替换为您的 GitHub 用户名哦！
+
+
