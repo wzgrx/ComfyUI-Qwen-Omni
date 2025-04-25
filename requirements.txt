@@ -4,4 +4,3 @@ numpy
 soundfile
 triton-windows
 modelscope
-
