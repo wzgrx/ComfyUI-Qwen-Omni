@@ -1,0 +1,27 @@
+[project]
+name = "qwen-omni"
+description =  """
+ComfyUI-Qwen-Omni is the first ComfyUI plugin supporting end-to-end multimodal interaction. 
+Integrating the Qwen2.5-Omni-7B large multimodal model, it enables seamless joint generation and editing of text, images, audio, and video within the ComfyUI framework. 
+
+Key features:
+- Multi-modal input support: text prompts, images, audio files, and video frames
+- Unified output generation: coherent text descriptions and high-quality speech synthesis
+- Parameterized control: adjustable temperature, max tokens, sampling strategy
+- GPU optimization: 4-bit/8-bit quantization for low-memory environments
+- Cross-modal editing: modify content across different media types
+
+By processing multiple input modalities simultaneously, the plugin delivers unprecedented流畅体验 in AI content creation, from creative writing to voiceovers and visual editing. Ideal for artists, developers, and researchers exploring the frontiers of multimodal AI.
+"""
+version = "0.1.0"
+license = {file = "LICENSE"}
+dependencies = ["transformers>=4.52.0.dev0", "qwen_omni_utils", "numpy", "soundfile", "triton-windows", "modelscope"]
+
+[project.urls]
+Repository = "https://github.com/SXQBW/ComfyUI-Qwen-Omni"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "sxqbw"
+DisplayName = "ComfyUI-Qwen-Omni"
+Icon = ""
