@@ -1,6 +1,11 @@
-transformers>=4.52.0.dev0 
+git+https://github.com/huggingface/transformers@v4.51.3-Qwen2.5-Omni-preview
+accelerate
 qwen_omni_utils
 numpy
 soundfile
 triton-windows
 modelscope
+bitsandbytes
+pillow
+numpy
+Requests
