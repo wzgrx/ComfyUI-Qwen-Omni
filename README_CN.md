@@ -1,12 +1,13 @@
-
-
 <div align="center">
 
 # ComfyUI-Qwen-Omni 🐼
+
 <p align="center">
         <a href="README.md">English</a> &nbsp｜ &nbsp 中文&nbsp&nbsp
 </p>
+
 **当 Figma 遇上 VSCode，艺术思维碰撞工程逻辑 —— 这是设计师向代码世界发出的浪漫宣言。**  
+
 ✨ 基于 Qwen2.5-Omni 的多模态革命性插件 ✨
   
 
