@@ -6,7 +6,7 @@
 </p>
 
 **When Figma meets VSCode, the collision of artistic thinking and engineering logic — this is a romantic declaration from designers to the world of code.**  
-✨ A revolutionary multimodal plugin based on Qwen2.5-Omni-7B ✨
+✨ A revolutionary multimodal plugin based on Qwen2.5-Omni ✨
   
 [![Star History](https://img.shields.io/github/stars/SXQBW/ComfyUI-Qwen-Omni?style=for-the-badge&logo=starship&color=FE428E&labelColor=0D1117)](https://github.com/SXQBW/ComfyUI-Qwen-Omni/stargazers)
 [![Model Download](https://img.shields.io/badge/Model_Download-6DB33F?style=for-the-badge&logo=ipfs&logoColor=white)](https://huggingface.co/Qwen/Qwen2.5-Omni-7B)
@@ -17,14 +17,15 @@
 
 ---
 
-**A ComfyUI plugin based on the multimodal large language model Qwen2.5-Omni-7B**
+**A ComfyUI plugin based on the multimodal large language model Qwen2.5-Omni**
 
 🔄 ComfyUI-Qwen-Omni is the first ComfyUI plugin that supports end-to-end multimodal interaction, enabling seamless joint generation and editing of text, images, and audio. Without intermediate steps, with just one operation, the model can simultaneously understand and process multiple input modalities, generating coherent text descriptions and voice outputs, providing an unprecedentedly smooth experience for AI creation.
 
-This plugin integrates the Qwen2.5-Omni-7B multimodal large model into ComfyUI, supporting text, image, audio, and video inputs, and capable of generating text and voice outputs, offering a more diverse interactive experience for your AI creation.
+This plugin integrates the Qwen2.5-Omni multimodal large model into ComfyUI, supporting text, image, audio, and video inputs, and capable of generating text and voice outputs, offering a more diverse interactive experience for your AI creation.
 
 ## 🌟 Features
 
+- **Dual-Mode Omni**: Supports Qwen2.5-Omni-3B and Qwen2.5-Omni-7B models.
 - **Multimodal input**: Supports text, images, audio, and video as inputs.
 - **Text generation**: Generates coherent text descriptions based on multimodal inputs.
 - **Speech synthesis**: Supports generating natural and fluent voice outputs (male or female voices available).
@@ -43,7 +44,7 @@ This plugin integrates the Qwen2.5-Omni-7B multimodal large model into ComfyUI, 
 ```
 2.**Download Model files**:
 
-The plugin will automatically download the Qwen2.5-Omni-7B model on its first run. Alternatively, you can manually download it in advance and place it in the ComfyUI/models/Qwen/Qwen2.5-Omni-7B/ directory.
+When first launched, the model will be automatically downloaded (based on your selection of Qwen2.5-Omni-3B or Qwen2.5-Omni-7B and network conditions, it will prioritize downloads from Hugging Face or ModelScope). Alternatively, you may manually download and place it in the ComfyUI/models/Qwen/ directory.
 
 📦 Model download links:
 <p align="left">

@@ -7,7 +7,7 @@
         <a href="README.md">English</a> &nbsp｜ &nbsp 中文&nbsp&nbsp
 </p>
 **当 Figma 遇上 VSCode，艺术思维碰撞工程逻辑 —— 这是设计师向代码世界发出的浪漫宣言。**  
-✨ 基于 Qwen2.5-Omni-7B 的多模态革命性插件 ✨
+✨ 基于 Qwen2.5-Omni 的多模态革命性插件 ✨
   
 
 [![Star History](https://img.shields.io/github/stars/SXQBW/ComfyUI-Qwen-Omni?style=for-the-badge&logo=starship&color=FE428E&labelColor=0D1117)](https://github.com/SXQBW/ComfyUI-Qwen-Omni/stargazers)
@@ -22,23 +22,24 @@
 ---
 
 
-**基于 Qwen2.5-Omni-7B 的多模态大型语言模型 ComfyUI 插件**
+**基于 Qwen2.5-Omni 的多模态大型语言模型 ComfyUI 插件**
 
 
 
 🔄 ComfyUI-Qwen-Omni 是首个支持端到端多模态交互的 ComfyUI 插件，实现了文本、图像、音频的无缝联合生成与编辑。无需中间步骤，只需一次操作，即可让模型同时理解并处理多种输入模态，生成连贯的文本描述和语音输出，为 AI 创作提供前所未有的流畅体验。
 
 
-这个插件将 Qwen2.5-Omni-7B 多模态大模型集成到 ComfyUI 中，支持文本、图像、音频和视频输入，并能生成文本和语音输出，为您的 AI 创作提供更丰富的交互体验。
+这个插件将 Qwen2.5-Omni 多模态大模型集成到 ComfyUI 中，支持文本、图像、音频和视频输入，并能生成文本和语音输出，为您的 AI 创作提供更丰富的交互体验。
 
 
 ## 🌟 特性亮点
-
+- **双模全能​**：支持 Qwen2.5-Omni-3B 和 Qwen2.5-Omni-7B 模型
 - **多模态输入**：支持文本、图像、音频和视频作为输入
 - **文本生成**：基于多模态输入生成连贯的文本描述
 - **语音合成**：支持生成自然流畅的语音输出（男声/女声可选）
 - **参数化控制**：可调整温度、最大 tokens、采样策略等生成参数
 - **GPU 优化**：支持 4-bit/8-bit 量化，降低显存需求
+
 
 
 ## 🚀 安装方法
@@ -54,7 +55,7 @@
 
 2. **下载模型文件**：
 
-   插件会在首次运行时自动下载 Qwen2.5-Omni-7B 模型，或您也可以提前手动下载并放置到 `ComfyUI/models/Qwen/Qwen2.5-Omni-7B/` 目录下。
+   在首次运行时自动下载模型（根据你选择的 Qwen2.5-Omni-3B 或 Qwen2.5-Omni-7B同时结合网络状况判断从huggingface或modelscope择优下载），或您也可以提前手动下载并放置到 `ComfyUI/models/Qwen/` 目录下。
 
    📦 模型下载地址：
 
