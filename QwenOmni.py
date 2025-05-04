@@ -354,19 +354,20 @@ class QwenOmniCombined:
                         try:
                             print(f"开始从 {source} 下载模型（第 {retry + 1} 次尝试）...")
                             if download_func == snapshot_download:
+                                # Hugging Face 下载
                                 cached_path = download_func(
                                     repo_id,
                                     cache_dir=self.cache_dir,
                                     ignore_patterns=["*.msgpack", "*.h5"],
-                                    force_download=True,  # 强制重新下载
                                     resume_download=True,  # 支持断点续传
-                                    timeout=300  # 设置超时时间为5分钟
+                                    local_files_only=False # 允许远程下载
                                 )
                             else:
+                                # ModelScope 下载
                                 cached_path = download_func(
                                     repo_id,
                                     cache_dir=self.cache_dir,
-                                    force=True  # ModelScope的强制下载参数
+                                    revision="master"
                                 )
 
                             used_cache_path = cached_path  # 记录使用的缓存路径
