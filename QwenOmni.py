@@ -357,7 +357,7 @@ class QwenOmniCombined:
                                 cached_path = download_func(
                                     repo_id,
                                     cache_dir=self.cache_dir,
-                                    ignore_patterns=["*.msgpack", "*.h5"]
+                                    ignore_patterns=["*.msgpack", "*.h5"],
                                     force_download=True,  # 强制重新下载
                                     resume_download=True,  # 支持断点续传
                                     timeout=300  # 设置超时时间为5分钟
@@ -365,7 +365,7 @@ class QwenOmniCombined:
                             else:
                                 cached_path = download_func(
                                     repo_id,
-                                    cache_dir=self.cache_dir
+                                    cache_dir=self.cache_dir,
                                     force=True  # ModelScope的强制下载参数
                                 )
 
