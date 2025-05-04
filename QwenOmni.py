@@ -16,6 +16,51 @@ import soundfile as sf
 import requests
 import time
 from .VideoUploader import VideoUploader
+import torchvision
+
+# 模型注册表 - 存储所有支持的模型版本信息
+MODEL_REGISTRY = {
+    "Qwen2.5-Omni-7B": {
+        "repo_id": {
+            "huggingface": "Qwen/Qwen2.5-Omni-7B",
+            "modelscope": "qwen/Qwen2.5-Omni-7B"
+        },
+        "required_files": [
+            "added_tokens.json", "chat_template.json", "merges.txt",
+            "model.safetensors.index.json", "preprocessor_config.json", 
+            "spk_dict.pt", "tokenizer.json", "vocab.json", "config.json",
+            "generation_config.json", "special_tokens_map.json",
+            "tokenizer_config.json",
+            # 7B模型有5个分片
+            "model-00001-of-00005.safetensors",
+            "model-00002-of-00005.safetensors",
+            "model-00003-of-00005.safetensors",
+            "model-00004-of-00005.safetensors",
+            "model-00005-of-00005.safetensors",
+        ],
+        "test_file": "model-00005-of-00005.safetensors",
+        "default": True
+    },
+    "Qwen2.5-Omni-3B": {
+        "repo_id": {
+            "huggingface": "Qwen/Qwen2.5-Omni-3B",
+            "modelscope": "qwen/Qwen2.5-Omni-3B"
+        },
+        "required_files": [
+            "added_tokens.json", "chat_template.json", "merges.txt",
+            "model.safetensors.index.json", "preprocessor_config.json", 
+            "spk_dict.pt", "tokenizer.json", "vocab.json", "config.json",
+            "generation_config.json", "special_tokens_map.json",
+            "tokenizer_config.json",
+            # 3B模型可能分片为3个
+            "model-00001-of-00003.safetensors",
+            "model-00002-of-00003.safetensors",
+            "model-00003-of-00003.safetensors",
+        ],
+        "test_file": "model-00003-of-00003.safetensors",
+        "default": False
+    }
+}
 
 
 def check_flash_attention():
@@ -23,7 +68,7 @@ def check_flash_attention():
     try:
         from flash_attn import flash_attn_func
         major, _ = torch.cuda.get_device_capability()
-        return major >= 8  # 仅支持计算能力8.0+的GPU（如RTX 30系及以上）
+        return major >= 8  # 仅支持计算能力8.0+的GPU
     except ImportError:
         return False
 
@@ -31,12 +76,11 @@ def check_flash_attention():
 FLASH_ATTENTION_AVAILABLE = check_flash_attention()
 
 
-def init_qwen_paths():
-    """初始化模型路径，确保使用绝对路径"""
+def init_qwen_paths(model_name):
+    """初始化模型路径，支持动态生成不同模型版本的路径"""
     base_dir = Path(folder_paths.models_dir).resolve()
-    qwen_dir = base_dir / "Qwen" # 添加VLM子目录如 / "Qwen" / "VLM"
-    model_dir = qwen_dir / "Qwen2.5-Omni-7B"    
-
+    qwen_dir = base_dir / "Qwen"
+    model_dir = qwen_dir / model_name  # 使用模型名称作为子目录
     
     # 创建目录
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -69,7 +113,7 @@ def test_download_speed(url):
         return 0
 
 
-def validate_model_path(model_path):
+def validate_model_path(model_path, model_name):
     """验证模型路径的有效性和模型文件是否齐全"""
     path_obj = Path(model_path)
     
@@ -87,49 +131,82 @@ def validate_model_path(model_path):
         return False
     
     # 检查模型文件是否齐全
-    if not check_model_files_exist(model_path):
+    if not check_model_files_exist(model_path, model_name):
         print(f"模型文件不完整: {model_path}")
         return False
     
     return True
 
 
-
-
-def check_model_files_exist(model_dir):
-    """检查模型文件是否齐全"""
-    required_files = [
-        "added_tokens.json",
-        "chat_template.json",
-        "merges.txt",
-        "model.safetensors.index.json",
-        "preprocessor_config.json",
-        "spk_dict.pt",
-        "tokenizer.json",
-        "vocab.json",
-        "config.json",
-        "generation_config.json",
-        "model-00001-of-00005.safetensors",
-        "model-00002-of-00005.safetensors",
-        "model-00003-of-00005.safetensors",
-        "model-00004-of-00005.safetensors",
-        "model-00005-of-00005.safetensors",
-        "special_tokens_map.json",
-        "tokenizer_config.json"
-    ]
+def check_model_files_exist(model_dir, model_name):
+    """检查特定模型版本所需的文件是否齐全"""
+    if model_name not in MODEL_REGISTRY:
+        print(f"错误: 未知模型版本 {model_name}")
+        return False
+    
+    required_files = MODEL_REGISTRY[model_name]["required_files"]
     for file in required_files:
         if not os.path.exists(os.path.join(model_dir, file)):
             return False
     return True
 
 
+# 视频处理工具类
+class VideoProcessor:
+    def __init__(self):
+        # 尝试导入torchcodec作为备选视频处理库
+        self.use_torchcodec = False
+        try:
+            import torchcodec
+            self.use_torchcodec = True
+            print("使用torchcodec进行视频处理")
+        except ImportError:
+            print("torchcodec不可用，使用torchvision进行视频处理（有弃用警告）")
+            # 抑制torchvision视频API弃用警告
+            import warnings
+            warnings.filterwarnings("ignore", category=UserWarning, module="torchvision.io")
+    
+    def read_video(self, video_path):
+        """读取视频文件并返回帧数据"""
+        start_time = time.time()
+        try:
+            if self.use_torchcodec:
+                # 使用torchcodec读取视频
+                import torchcodec
+                decoder = torchcodec.VideoDecoder(video_path)
+                frames = []
+                for frame in decoder:
+                    frames.append(frame)
+                fps = decoder.get_fps()
+                total_frames = len(frames)
+                frames = torch.stack(frames) if frames else torch.zeros(0)
+            else:
+                # 使用torchvision读取视频（弃用API）
+                frames, _, info = torchvision.io.read_video(video_path, pts_unit="sec")
+                fps = info["video_fps"]
+                total_frames = frames.shape[0]
+            
+            process_time = time.time() - start_time
+            print(f"视频处理完成: {video_path}, 总帧数: {total_frames}, FPS: {fps:.2f}, 处理时间: {process_time:.3f}s")
+            return frames, fps, total_frames
+            
+        except Exception as e:
+            print(f"视频处理错误: {e}")
+            return None, None, None
+
 
 class QwenOmniCombined:
     def __init__(self):
+        # 默认使用注册表中的第一个默认模型
+        default_model = next((name for name, info in MODEL_REGISTRY.items() if info.get("default", False)), 
+                            list(MODEL_REGISTRY.keys())[0])
+        
         # 重置环境变量，避免干扰
         os.environ.pop("HUGGINGFACE_HUB_CACHE", None)     
 
-        self.model_path = init_qwen_paths()
+        self.current_model_name = default_model
+        self.current_quantization = None  # 记录当前的量化配置
+        self.model_path = init_qwen_paths(self.current_model_name)
         self.cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
         print(f"模型路径: {self.model_path}")
         print(f"缓存路径: {self.cache_dir}")
@@ -140,156 +217,36 @@ class QwenOmniCombined:
         self.model = None
         self.processor = None
         self.tokenizer = None
+        self.video_processor = VideoProcessor()  # 初始化视频处理器
+        self.last_generated_text = ""  # 保存上次生成的文本，用于调试
+        self.generation_stats = {"count": 0, "total_time": 0}  # 统计生成性能
 
-
-    def copy_cached_model_to_local(self, cached_path, target_path):
-        """将缓存的模型文件复制到目标路径"""
-        print(f"正在将模型从缓存复制到: {target_path}")
-        target_path = Path(target_path)
-        target_path.mkdir(parents=True, exist_ok=True)
-        
-        # 使用shutil进行递归复制
-        import shutil
-        for item in Path(cached_path).iterdir():
-            if item.is_dir():
-                shutil.copytree(item, target_path / item.name, dirs_exist_ok=True)
-            else:
-                shutil.copy2(item, target_path / item.name)
-        
-        # 验证复制是否成功
-        if validate_model_path(target_path):
-            print(f"模型已成功复制到 {target_path}")
-        else:
-            raise RuntimeError(f"复制后模型文件仍不完整: {target_path}")
-
-
-
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "model_name": (
-                    ["Qwen2.5-Omni-7B"],
-                    {
-                        "default": "Qwen2.5-Omni-7B",
-                        "tooltip": "Select the available model version. Currently, only the Qwen2.5-Omni-7B multimodal large model is supported."
-                    }
-                ),
-                "quantization": (
-                    [
-                        "👍 4-bit (VRAM-friendly)",
-                        "⚖️ 8-bit (Balanced Precision)",
-                        "🚫 None (Original Precision)"
-                    ],
-                    {
-                        "default": "👍 4-bit (VRAM-friendly)",
-                        "tooltip": "Select the quantization level:\n✅ 4-bit: Significantly reduces VRAM usage, suitable for resource-constrained environments.\n⚖️ 8-bit: Strikes a balance between precision and performance.\n🚫 None: Uses the original floating-point precision (requires a high-end GPU)."
-                    }
-                ),
-                "prompt": (
-                    "STRING",
-                    {
-                        "default": "Hi!😽",
-                        "multiline": True,
-                        "tooltip": "Enter a text prompt, supporting Chinese and emojis. Example: 'Describe a cat in a painter's style.'"
-                    }
-                ),
-                "audio_output": (
-                    [
-                        "🔇None (No Audio)",
-                        "👱‍♀️Chelsie (Female)",
-                        "👨‍🦰Ethan (Male)"
-                    ],
-                    {
-                        "default": "🔇None (No Audio)",
-                        "tooltip": "Audio output options:\n🔇 Do not generate audio.\n👱‍♀️ Use the female voice Chelsie (warm tone).\n👨‍🦰 Use the male voice Ethan (calm tone)."
-                    }
-                ),
-                "audio_source": (
-                    [
-                        "🎧 Separate Audio Input",
-                        "🎬 Video Built-in Audio"
-                    ],
-                    {
-                        "default": "🎧 Separate Audio Input",
-                        "display": "radio",
-                        "tooltip": "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
-                    }
-                ),
-                "max_tokens": (
-                    "INT",
-                    {
-                        "default": 132,
-                        "min": 64,
-                        "max": 2048,
-                        "step": 16,
-                        "display": "slider",
-                        "tooltip": "Control the maximum length of the generated text (in tokens). \nGenerally, 100 tokens correspond to approximately 50 - 100 Chinese characters or 67 - 100 English words, but the actual number may vary depending on the text content and the model's tokenization strategy. \nRecommended range: 64 - 512."
-                    }
-                ),
-                "temperature": (
-                    "FLOAT",
-                    {
-                        "default": 0.4,
-                        "min": 0.1,
-                        "max": 1.0,
-                        "step": 0.1,
-                        "display": "slider",
-                        "tooltip": "Control the generation diversity:\n▫️ 0.1 - 0.3: Generate structured/technical content.\n▫️ 0.5 - 0.7: Balance creativity and logic.\n▫️ 0.8 - 1.0: High degree of freedom (may produce incoherent content)."
-                    }
-                ),
-                "top_p": (
-                    "FLOAT",
-                    {
-                        "default": 0.9,
-                        "min": 0.0,
-                        "max": 1.0,
-                        "step": 0.01,
-                        "display": "slider",
-                        "tooltip": "Nucleus sampling threshold:\n▪️ Close to 1.0: Retain more candidate words (more random).\n▪️ 0.5 - 0.8: Balance quality and diversity.\n▪️ Below 0.3: Generate more conservative content."
-                    }
-                ),
-                "repetition_penalty": (
-                    "FLOAT",
-                    {
-                        "default": 1.0,
-                        "min": 0.0,
-                        "max": 2.0,
-                        "step": 0.01,
-                        "display": "slider",
-                        "tooltip": "Control of repeated content:\n⚠️ 1.0: Default behavior.\n⚠️ >1.0 (Recommended 1.2): Suppress repeated phrases.\n⚠️ <1.0 (Recommended 0.8): Encourage repeated emphasis."
-                    }
-                )
-            },
-            "optional": {
-                "image": (
-                    "IMAGE",
-                    {
-                        "tooltip": "Upload a reference image (supports PNG/JPG), and the model will adjust the generation result based on the image content."
-                    }
-                ),
-                "audio": (
-                    "AUDIO",
-                    {
-                        "tooltip": "Upload an audio file (supports MP3/WAV), and the model will analyze the audio content and generate relevant responses."
-                    }
-                ),
-                "video_path": (
-                    "VIDEO_PATH",
-                    {
-                        "tooltip": "Enter the video file  (supports MP4/WEBM), and the model will extract visual features to assist in generation."
-                    }
-                )
-            }
-        }
-
-    RETURN_TYPES = ("STRING", "AUDIO")
-    RETURN_NAMES = ("text", "audio")
-    FUNCTION = "process"
-    CATEGORY = "🐼QwenOmni"    
-
+    def clear_model_resources(self):
+        """释放当前模型占用的资源"""
+        if self.model is not None:
+            print("释放当前模型占用的资源...")
+            del self.model, self.processor, self.tokenizer
+            self.model = None
+            self.processor = None
+            self.tokenizer = None
+            torch.cuda.empty_cache()  # 清理GPU缓存
+    
     def load_model(self, model_name, quantization):
+        # 检查是否需要重新加载模型
+        if (self.model is not None and 
+            self.current_model_name == model_name and 
+            self.current_quantization == quantization):
+            print(f"使用已加载的模型: {model_name}，量化: {quantization}")
+            return
+        
+        # 需要重新加载，先释放现有资源
+        self.clear_model_resources()
+        
+        # 更新当前模型名称和路径
+        self.current_model_name = model_name
+        self.model_path = init_qwen_paths(self.current_model_name)
+        self.current_quantization = quantization
+        
         # 添加CUDA可用性检查
         if not torch.cuda.is_available():
             raise RuntimeError(f"CUDA is required for  {model_name} model")
@@ -310,37 +267,36 @@ class QwenOmniCombined:
         # 自定义device_map，这里假设只有一个GPU，将模型尽可能放到GPU上
         device_map = {"": 0} if torch.cuda.device_count() > 0 else "auto"
 
-
-
         # 检查模型文件是否存在且完整
-        if not validate_model_path(self.model_path):
+        if not validate_model_path(self.model_path, self.current_model_name):
             print(f"检测到模型文件缺失，正在为你下载 {model_name} 模型，请稍候...")
             print(f"下载将保存在: {self.model_path}")
             
             # 开始下载逻辑
             try:
+                # 从注册表获取模型信息
+                model_info = MODEL_REGISTRY[model_name]
+                
                 # 测试下载速度
-                huggingface_test_url = "https://huggingface.co/Qwen/Qwen2.5-Omni-7B/resolve/main/model-00005-of-00005.safetensors"
-                modelscope_test_url = "https://modelscope.cn/api/v1/models/qwen/Qwen2.5-Omni-7B/repo?Revision=master&FilePath=model-00005-of-00005.safetensors"
+                huggingface_test_url = f"https://huggingface.co/{model_info['repo_id']['huggingface']}/resolve/main/{model_info['test_file']}"
+                modelscope_test_url = f"https://modelscope.cn/api/v1/models/{model_info['repo_id']['modelscope']}/repo?Revision=master&FilePath={model_info['test_file']}"
                 huggingface_speed = test_download_speed(huggingface_test_url)
                 modelscope_speed = test_download_speed(modelscope_test_url)
-
 
                 print(f"Hugging Face下载速度: {huggingface_speed:.2f} KB/s")
                 print(f"ModelScope下载速度: {modelscope_speed:.2f} KB/s")
 
-                # 优化判断条件：只有当Hugging Face速度超过ModelScope 50%时才优先选择
-
+                # 根据下载速度选择优先下载源
                 if huggingface_speed > modelscope_speed * 1.5:
                     download_sources = [
-                        (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face"),
-                        (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope")
+                        (snapshot_download, model_info['repo_id']['huggingface'], "Hugging Face"),
+                        (modelscope_snapshot_download, model_info['repo_id']['modelscope'], "ModelScope")
                     ]
                     print("基于下载速度分析，优先尝试从Hugging Face下载")
                 else:
                     download_sources = [
-                        (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope"),
-                        (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face")
+                        (modelscope_snapshot_download, model_info['repo_id']['modelscope'], "ModelScope"),
+                        (snapshot_download, model_info['repo_id']['huggingface'], "Hugging Face")
                     ]
                     print("基于下载速度分析，优先尝试从ModelScope下载")
 
@@ -354,16 +310,14 @@ class QwenOmniCombined:
                         try:
                             print(f"开始从 {source} 下载模型（第 {retry + 1} 次尝试）...")
                             if download_func == snapshot_download:
-                                # Hugging Face 下载
                                 cached_path = download_func(
                                     repo_id,
                                     cache_dir=self.cache_dir,
                                     ignore_patterns=["*.msgpack", "*.h5"],
-                                    resume_download=True,  # 支持断点续传
-                                    local_files_only=False # 允许远程下载
+                                    resume_download=True,
+                                    local_files_only=False
                                 )
                             else:
-                                # ModelScope 下载
                                 cached_path = download_func(
                                     repo_id,
                                     cache_dir=self.cache_dir,
@@ -376,12 +330,6 @@ class QwenOmniCombined:
                             self.copy_cached_model_to_local(cached_path, self.model_path)
                             
                             print(f"成功从 {source} 下载模型到 {self.model_path}")
-
-                            # 下载成功提示
-                            print("\n⚠️ 注意：模型下载过程中使用了缓存文件")
-                            print(f"缓存路径: {cached_path}")
-                            print("为避免占用额外硬盘空间，你可以在确认模型正常工作后删除此缓存目录")
-                            
                             success = True
                             break
 
@@ -397,7 +345,7 @@ class QwenOmniCombined:
                     raise RuntimeError("从所有源下载模型均失败。")
                 
                 # 下载完成后再次验证
-                if not validate_model_path(self.model_path):
+                if not validate_model_path(self.model_path, self.current_model_name):
                     raise RuntimeError(f"下载后模型文件仍不完整: {self.model_path}")
                 
                 print(f"模型 {model_name} 已准备就绪")
@@ -414,7 +362,7 @@ class QwenOmniCombined:
                 raise RuntimeError(f"无法下载模型 {model_name}，请手动下载并放置到 {self.model_path}")
 
         # 模型文件完整，正常加载
-        print(f"加载模型: {self.model_path}")
+        print(f"加载模型: {self.model_path}，量化: {quantization}")
         self.model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
             self.model_path,
             device_map=device_map,
@@ -427,96 +375,211 @@ class QwenOmniCombined:
             enable_audio_output=True,
         ).eval()
 
-        # ✅ 编译优化（PyTorch 2.2+）
+        # 编译优化（PyTorch 2.2+）
         if torch.__version__ >= "2.2":
             self.model = torch.compile(self.model, mode="reduce-overhead")
 
-        # ✅ SDP优化（推荐）
+        # SDP优化
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(True)
 
         self.processor = AutoProcessor.from_pretrained(self.model_path, trust_remote_code=True)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
 
+    def copy_cached_model_to_local(self, cached_path, target_path):
+        """将缓存的模型文件复制到目标路径"""
+        print(f"正在将模型从缓存复制到: {target_path}")
+        target_path = Path(target_path)
+        target_path.mkdir(parents=True, exist_ok=True)
+        
+        # 使用shutil进行递归复制
+        import shutil
+        for item in Path(cached_path).iterdir():
+            if item.is_dir():
+                shutil.copytree(item, target_path / item.name, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, target_path / item.name)
+        
+        # 验证复制是否成功
+        if validate_model_path(target_path, self.current_model_name):
+            print(f"模型已成功复制到 {target_path}")
+        else:
+            raise RuntimeError(f"复制后模型文件仍不完整: {target_path}")
+
     def tensor_to_pil(self, image_tensor):
+        """将图像张量转换为PIL图像"""
         if image_tensor.dim() == 4:
             image_tensor = image_tensor[0]
         image_np = (image_tensor.cpu().numpy() * 255).astype(np.uint8)
         return Image.fromarray(image_np)
 
+    def preprocess_image(self, image):
+        """预处理图像，包括尺寸调整和优化"""
+        pil_image = self.tensor_to_pil(image)
+        
+        # 限制最大尺寸，避免过大的输入
+        max_res = 1024
+        if max(pil_image.size) > max_res:
+            pil_image.thumbnail((max_res, max_res))
+        
+        # 转换回张量并归一化
+        img_np = np.array(pil_image)
+        img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0) / 255.0
+        
+        # 转回PIL图像
+        pil_image = Image.fromarray((img_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
+        return pil_image
+
+    def preprocess_video(self, video_path):
+        """预处理视频，包括帧提取和尺寸调整"""
+        # 使用视频处理器读取视频
+        frames, fps, total_frames = self.video_processor.read_video(video_path)
+        
+        if frames is None:
+            print(f"无法处理视频: {video_path}")
+            return None, None, None
+        
+        # 更激进的帧数量限制
+        max_frames = 15  # 从50减少到30
+        if total_frames > max_frames:
+            # 采样帧
+            indices = np.linspace(0, total_frames - 1, max_frames, dtype=int)
+            frames = frames[indices]
+            print(f"视频帧数量从 {total_frames} 采样到 {len(frames)}")
+        
+        # 更小的帧尺寸
+        resized_frames = []
+        for frame in frames:
+            # 转换为PIL图像
+            frame_pil = Image.fromarray(frame.numpy())
+            # 调整大小为384x384 (原为512x512)
+            frame_pil.thumbnail((384, 384))
+            # 转回张量
+            frame_tensor = torch.from_numpy(np.array(frame_pil)).permute(2, 0, 1)
+            resized_frames.append(frame_tensor)
+        
+        # 转换回张量
+        if resized_frames:
+            resized_frames = torch.stack(resized_frames)
+        else:
+            resized_frames = torch.zeros(0)
+        
+        return resized_frames, fps, len(frames)  # 返回实际采样后的帧数
+
     @torch.no_grad()
     def process(self, model_name, quantization, prompt, audio_output, audio_source, max_tokens, temperature, top_p,
                 repetition_penalty, audio=None, image=None, video_path=None):
-        if self.model is None or self.processor is None:
-            self.load_model(model_name, quantization)
-
+        start_time = time.time()
+        
+        # 确保加载正确的模型和量化配置
+        self.load_model(model_name, quantization)
+        
+        # 图像预处理
         pil_image = None
         if image is not None:
-            pil_image = self.tensor_to_pil(image)
-            max_res = 1024
-            if max(pil_image.size) > max_res:
-                pil_image.thumbnail((max_res, max_res))
-                pil_image = np.array(pil_image)
-                pil_image = torch.from_numpy(pil_image).permute(2, 0, 1).unsqueeze(0) / 255.0
-                pil_image = Image.fromarray((pil_image.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
-
+            pil_image = self.preprocess_image(image)
+        
+        # 音频预处理
         audio_path = None
-        temp_audio_file = None
-
         if audio:
             try:
-                temp_audio_file = tempfile.NamedTemporaryFile(suffix=".flac", delete=False)
-                audio_path = temp_audio_file.name
-                waveform = audio["waveform"].squeeze(0).cpu().numpy()
-                sample_rate = audio["sample_rate"]
-                sf.write(audio_path, waveform.T, sample_rate)
+                # 创建临时文件并保存音频
+                with tempfile.NamedTemporaryFile(suffix=".flac", delete=False) as f:
+                    audio_path = f.name
+                    waveform = audio["waveform"].squeeze(0).cpu().numpy()
+                    sample_rate = audio["sample_rate"]
+                    sf.write(audio_path, waveform.T, sample_rate)
             except Exception as e:
-                print(f"Error saving audio to temporary file: {e}")
+                print(f"保存音频到临时文件时出错: {e}")
                 audio_path = None
-
+        
+        # 视频预处理
+        video_frames = None
+        if video_path:
+            video_frames, video_fps, video_frames_count = self.preprocess_video(video_path)
+            if video_frames is not None:
+                print(f"视频已处理: {video_path}, 帧数: {video_frames_count}, FPS: {video_fps}")
+        
+        # 构建对话
         SYSTEM_PROMPT = "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."
-
+        
         conversation = [
             {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT}]},
             {"role": "user", "content": []}
         ]
-
+        
+        # 添加图像、音频和视频到对话
         if pil_image is not None:
             conversation[-1]["content"].append({"type": "image", "image": pil_image})
-
-        # 添加音频/视频输入（直接传递路径，由 qwen-omni-utils 处理）
+        
         use_video_audio = audio_source == "🎬 Video Built-in Audio"
         if audio_path and not use_video_audio:
             conversation[-1]["content"].append({"type": "audio", "audio": audio_path})
-        if video_path:
-            conversation[-1]["content"].append({"type": "video", "video": video_path})  # 直接添加视频路径
-
+        
+        if video_path and video_frames is not None:
+            # 转换视频帧为PIL图像列表
+            video_frame_list = []
+            for frame in video_frames:
+                frame = frame.permute(1, 2, 0).cpu().numpy() * 255
+                frame = frame.astype(np.uint8)
+                video_frame_list.append(Image.fromarray(frame))
+            
+            video_data = {
+                "video": video_frame_list,
+                "fps": video_fps,
+                "total_frames": video_frames_count
+            }
+            conversation[-1]["content"].append({"type": "video", "video": video_frame_list})
+            conversation[-1]["content"].append({"type": "video_data", "data": video_data})
+        
+        # 处理用户提示
         user_prompt = prompt if prompt.endswith(("?", ".", "！", "。", "？", "！")) else f"{prompt} "
         conversation[-1]["content"].append({"type": "text", "text": user_prompt})
-
+        
+        # 应用聊天模板
         input_text = self.processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
-
+        
+        # 准备处理器参数
         processor_args = {
             "text": input_text,
             "return_tensors": "pt",
             "padding": True,
             "use_audio_in_video": use_video_audio
         }
-
-        # 直接调用 qwen-omni-utils 的多模态处理逻辑
+        
+        # 调用多模态处理逻辑
         audios, images, videos = process_mm_info(conversation, use_audio_in_video=use_video_audio)
         processor_args["audio"] = audios
         processor_args["images"] = images
         processor_args["videos"] = videos
-
-        inputs = self.processor(**processor_args).to(self.model.device)
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_inputs = {
-            k: v.to(self.device)
-            for k, v in inputs.items()
-            if v is not None
-        }
-
+        
+        # 清理不再需要的大对象
+        del video_frames, audios, images, videos
+        torch.cuda.empty_cache()
+        
+        # 在函数开始处初始化model_inputs为None
+        model_inputs = None
+        
+        # 将输入移至设备
+        try:
+            inputs = self.processor(**processor_args).to(self.model.device)
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            model_inputs = {
+                k: v.to(self.device)
+                for k, v in inputs.items()
+                if v is not None
+            }
+            
+            # 确保model_inputs包含所需的键
+            if "input_ids" not in model_inputs:
+                raise ValueError("处理后的输入不包含'input_ids'键")
+            
+        except Exception as e:
+            print(f"处理输入时发生错误: {e}")
+            # 这里可以添加更多的错误处理逻辑，例如返回默认值或抛出特定异常
+            raise RuntimeError("无法处理模型输入") from e
+        
+        # 生成配置
         generate_config = {
             "max_new_tokens": max(max_tokens, 10),
             "temperature": temperature,
@@ -529,44 +592,65 @@ class QwenOmniCombined:
             "eos_token_id": self.tokenizer.eos_token_id,
             "pad_token_id": self.tokenizer.pad_token_id,
         }
-
+        
         if generate_config["return_audio"]:
             generate_config["speaker"] = "Chelsie" if "Chelsie" in audio_output else "Ethan"
+        
+        # 记录GPU内存使用情况
+        if torch.cuda.is_available():
+            pre_forward_memory = torch.cuda.memory_allocated() / 1024**2
+            print(f"生成前GPU内存使用: {pre_forward_memory:.2f} MB")
+        
+        # 检查model_inputs是否已正确初始化
+        if model_inputs is None:
+            raise RuntimeError("模型输入未正确初始化")
 
-        outputs = self.model.generate(**model_inputs, **generate_config)
+        # 使用新的autocast API
+        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+            outputs = self.model.generate(**model_inputs, **generate_config)
 
-        # 统一批次维度，确保文本token是二维张量
+        # 记录GPU内存使用情况
+        if torch.cuda.is_available():
+            post_forward_memory = torch.cuda.memory_allocated() / 1024**2
+            print(f"生成后GPU内存使用: {post_forward_memory:.2f} MB")
+            print(f"生成过程中GPU内存增加: {post_forward_memory - pre_forward_memory:.2f} MB")
+        
+        # 处理输出
         if generate_config["return_audio"]:
             text_tokens = outputs[0] if outputs[0].dim() == 2 else outputs[0].unsqueeze(0)
             audio_tensor = outputs[1]
         else:
             text_tokens = outputs if outputs.dim() == 2 else outputs.unsqueeze(0)
             audio_tensor = torch.zeros(0, 0, device=self.model.device)
-
-        # 关键修正：对 text_tokens 进行 token 切片处理
+        
+        # 清理不再需要的大对象
+        del outputs, inputs
+        torch.cuda.empty_cache()
+        
+        # 截取新生成的token
         input_length = model_inputs["input_ids"].shape[1]
         text_tokens = text_tokens[:, input_length:]  # 截取新生成的token
-
-        # 直接获取完整的生成文本
+        
+        # 解码文本
         text = self.tokenizer.decode(
-            text_tokens[0],  # 使用正确的变量
+            text_tokens[0],
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True
         )
-
-        # 删除临时文件
-        if temp_audio_file:
+        
+        # 保存生成的文本用于调试
+        self.last_generated_text = text
+        del model_inputs
+        torch.cuda.empty_cache()
+        
+        # 清理临时文件
+        if audio_path:
             try:
-                os.remove(temp_audio_file.name)
+                os.remove(audio_path)
             except Exception as e:
-                print(f"Error deleting temporary audio file: {e}")
-        if use_video_audio and 'video_audio_path' in locals():
-            try:
-                os.remove(video_audio_path)
-            except Exception as e:
-                print(f"Error deleting video audio temp file: {e}")
-
-        # 处理音频部分
+                print(f"删除临时音频文件时出错: {e}")
+        
+        # 处理音频输出
         if generate_config["return_audio"]:
             audio = audio_tensor
             if isinstance(audio, np.ndarray):
@@ -575,16 +659,16 @@ class QwenOmniCombined:
                 audio = audio.unsqueeze(0)
         else:
             audio = torch.zeros(0, 0, device=self.model.device)
-
+        
         if audio.dim() == 3:
             audio = audio.mean(dim=1)
         assert audio.dim() == 2, f"Audio waveform must be 2D, got {audio.dim()}D"
-
+        
         audio_output_data = {
             "waveform": audio,
             "sample_rate": 24000
         }
-
+        
         if generate_config["return_audio"]:
             buffer = io.BytesIO()
             torchaudio.save(buffer, audio_output_data["waveform"].cpu(), 24000, format="wav")
@@ -594,14 +678,147 @@ class QwenOmniCombined:
                 "waveform": waveform.unsqueeze(0),
                 "sample_rate": sample_rate
             }
-
-        del outputs
+        
+        # 再次清理显存
         torch.cuda.empty_cache()
-
+        
+        # 计算处理时间
+        process_time = time.time() - start_time
+        self.generation_stats["count"] += 1
+        self.generation_stats["total_time"] += process_time
+        
+        # 打印性能统计
+        print(f"生成完成，耗时: {process_time:.2f} 秒")
+        if self.generation_stats["count"] > 0:
+            avg_time = self.generation_stats["total_time"] / self.generation_stats["count"]
+            print(f"平均生成时间: {avg_time:.2f} 秒/次")
+        
         return (text.strip(), audio_output_data)
 
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model_name": (
+                    list(MODEL_REGISTRY.keys()),  # 动态生成模型选项
+                    {
+                        "default": next((name for name, info in MODEL_REGISTRY.items() if info.get("default", False)), 
+                                       list(MODEL_REGISTRY.keys())[0]),
+                        "tooltip": "Select the available model version."
+                    }
+                ),
+                "quantization": (
+                    [
+                        "👍 4-bit (VRAM-friendly)",
+                        "⚖️ 8-bit (Balanced Precision)",
+                        "🚫 None (Original Precision)"
+                    ],
+                    {
+                        "default": "👍 4-bit (VRAM-friendly)",
+                        "tooltip": "Select the quantization level"
+                    }
+                ),
+                "prompt": (
+                    "STRING",
+                    {
+                        "default": "Hi!😽",
+                        "multiline": True,
+                        "tooltip": "Enter a text prompt"
+                    }
+                ),
+                "audio_output": (
+                    [
+                        "🔇None (No Audio)",
+                        "👱‍♀️Chelsie (Female)",
+                        "👨‍🦰Ethan (Male)"
+                    ],
+                    {
+                        "default": "🔇None (No Audio)",
+                        "tooltip": "Audio output options"
+                    }
+                ),
+                "audio_source": (
+                    [
+                        "🎧 Separate Audio Input",
+                        "🎬 Video Built-in Audio"
+                    ],
+                    {
+                        "default": "🎧 Separate Audio Input",
+                        "display": "radio",
+                        "tooltip": "Select audio source"
+                    }
+                ),
+                "max_tokens": (
+                    "INT",
+                    {
+                        "default": 132,
+                        "min": 64,
+                        "max": 2048,
+                        "step": 16,
+                        "display": "slider",
+                        "tooltip": "Control the maximum length of the generated text"
+                    }
+                ),
+                "temperature": (
+                    "FLOAT",
+                    {
+                        "default": 0.4,
+                        "min": 0.1,
+                        "max": 1.0,
+                        "step": 0.1,
+                        "display": "slider",
+                        "tooltip": "Control the generation diversity"
+                    }
+                ),
+                "top_p": (
+                    "FLOAT",
+                    {
+                        "default": 0.9,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "display": "slider",
+                        "tooltip": "Nucleus sampling threshold"
+                    }
+                ),
+                "repetition_penalty": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 2.0,
+                        "step": 0.01,
+                        "display": "slider",
+                        "tooltip": "Control of repeated content"
+                    }
+                )
+            },
+            "optional": {
+                "image": (
+                    "IMAGE",
+                    {
+                        "tooltip": "Upload a reference image"
+                    }
+                ),
+                "audio": (
+                    "AUDIO",
+                    {
+                        "tooltip": "Upload an audio file"
+                    }
+                ),
+                "video_path": (
+                    "VIDEO_PATH",
+                    {
+                        "tooltip": "Enter the video file path"
+                    }
+                )
+            }
+        }
 
-
+    RETURN_TYPES = ("STRING", "AUDIO")
+    RETURN_NAMES = ("text", "audio")
+    FUNCTION = "process"
+    CATEGORY = "🐼QwenOmni"    
 
 
 NODE_CLASS_MAPPINGS = {
@@ -613,4 +830,3 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VideoUploader": "Video Uploader🐼",
     "QwenOmniCombined": "Qwen Omni Combined🐼"
 }
-    
