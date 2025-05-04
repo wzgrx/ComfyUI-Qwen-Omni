@@ -70,25 +70,29 @@ def test_download_speed(url):
 
 
 def validate_model_path(model_path):
-    """验证模型路径的有效性"""
+    """验证模型路径的有效性和模型文件是否齐全"""
     path_obj = Path(model_path)
     
-    # 基本检查
-    is_absolute = path_obj.is_absolute()
-    exists = path_obj.exists()
-    is_dir = path_obj.is_dir()
+    # 基本路径检查
+    if not path_obj.is_absolute():
+        print(f"错误: {model_path} 不是绝对路径")
+        return False
     
-    # 文件数量检查
-    file_count = len(list(path_obj.glob("*"))) if exists else 0
+    if not path_obj.exists():
+        print(f"模型目录不存在: {model_path}")
+        return False
     
-    # 打印结果
-    print(f"路径验证: {model_path}")
-    print(f"  - 绝对路径: {is_absolute}")
-    print(f"  - 存在性: {exists}")
-    print(f"  - 是否为目录: {is_dir}")
-    print(f"  - 文件数量: {file_count}")
+    if not path_obj.is_dir():
+        print(f"错误: {model_path} 不是目录")
+        return False
     
-    return exists and is_dir and file_count > 0
+    # 检查模型文件是否齐全
+    if not check_model_files_exist(model_path):
+        print(f"模型文件不完整: {model_path}")
+        return False
+    
+    return True
+
 
 
 
@@ -283,66 +287,76 @@ class QwenOmniCombined:
         device_map = {"": 0} if torch.cuda.device_count() > 0 else "auto"
 
 
-        # 验证路径
+
+        # 检查模型文件是否存在且完整
         if not validate_model_path(self.model_path):
-            raise RuntimeError(f"无效的模型路径: {self.model_path}")
-        
+            print(f"检测到模型文件缺失，正在为你下载 {model_name} 模型，请稍候...")
+            print(f"下载将保存在: {self.model_path}")
+            
+            # 开始下载逻辑
+            try:
+                # 测试下载速度
+                huggingface_test_url = "https://huggingface.co/Qwen/Qwen2.5-Omni-7B/resolve/main/model-00005-of-00005.safetensors"
+                modelscope_test_url = "https://modelscope.cn/api/v1/models/qwen/Qwen2.5-Omni-7B/repo?Revision=master&FilePath=model-00005-of-00005.safetensors"
+                huggingface_speed = test_download_speed(huggingface_test_url)
+                modelscope_speed = test_download_speed(modelscope_test_url)
 
-        # 检查模型文件是否齐全
-        if check_model_files_exist(self.model_path):
-            print("模型文件已存在且齐全，无需下载。")
-        else:
-            print(f"模型文件缺失，开始下载到缓存: {self.cache_dir}")            
-            # 测试下载速度
-            huggingface_test_url = "https://huggingface.co/Qwen/Qwen2.5-Omni-7B/resolve/main/model-00005-of-00005.safetensors"
-            modelscope_test_url = "https://modelscope.cn/api/v1/models/qwen/Qwen2.5-Omni-7B/repo?Revision=master&FilePath=model-00005-of-00005.safetensors"
-            huggingface_speed = test_download_speed(huggingface_test_url)
-            modelscope_speed = test_download_speed(modelscope_test_url)
-
-            if huggingface_speed >= modelscope_speed:
-                download_sources = [
-                    (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face"),
-                    (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope")
-                ]
-            else:
-                download_sources = [
-                    (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope"),
-                    (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face")
-                ]
-
-            max_retries = 3
-            for download_func, repo_id, source in download_sources:
-                for retry in range(max_retries):
-                    try:
-                        if download_func == snapshot_download:
-                            # 下载到缓存目录
-                            cached_path = download_func(
-                                repo_id,
-                                cache_dir=self.cache_dir,  # 修正为缓存目录
-                                ignore_patterns=["*.msgpack", "*.h5"]
-                            )
-                        else:
-                            cached_path = download_func(
-                                repo_id,
-                                cache_dir=self.cache_dir  # 修正为缓存目录
-                            )
-                        
-                        # 将下载的模型复制到模型目录
-                        self.copy_cached_model_to_local(cached_path, self.model_path)
-                        
-                        print(f"成功从 {source} 下载模型到 {self.model_path}")
-                        break
-                    except Exception as e:
-                        if retry < max_retries - 1:
-                            print(f"从 {source} 下载模型失败（第 {retry + 1} 次尝试）: {e}，即将进行下一次尝试...")
-                        else:
-                            print(f"从 {source} 下载模型失败（第 {retry + 1} 次尝试）: {e}，尝试其他源...")
+                if huggingface_speed >= modelscope_speed:
+                    download_sources = [
+                        (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face"),
+                        (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope")
+                    ]
                 else:
-                    continue
-                break
-            else:
-                raise RuntimeError("从所有源下载模型均失败。")
+                    download_sources = [
+                        (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope"),
+                        (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face")
+                    ]
 
+                max_retries = 3
+                for download_func, repo_id, source in download_sources:
+                    for retry in range(max_retries):
+                        try:
+                            print(f"开始从 {source} 下载模型（第 {retry + 1} 次尝试）...")
+                            if download_func == snapshot_download:
+                                cached_path = download_func(
+                                    repo_id,
+                                    cache_dir=self.cache_dir,
+                                    ignore_patterns=["*.msgpack", "*.h5"]
+                                )
+                            else:
+                                cached_path = download_func(
+                                    repo_id,
+                                    cache_dir=self.cache_dir
+                                )
+                            
+                            # 将下载的模型复制到模型目录
+                            self.copy_cached_model_to_local(cached_path, self.model_path)
+                            
+                            print(f"成功从 {source} 下载模型到 {self.model_path}")
+                            break
+                        except Exception as e:
+                            if retry < max_retries - 1:
+                                print(f"从 {source} 下载模型失败（第 {retry + 1} 次尝试）: {e}，即将进行下一次尝试...")
+                            else:
+                                print(f"从 {source} 下载模型失败（第 {retry + 1} 次尝试）: {e}，尝试其他源...")
+                    else:
+                        continue
+                    break
+                else:
+                    raise RuntimeError("从所有源下载模型均失败。")
+                
+                # 下载完成后再次验证
+                if not validate_model_path(self.model_path):
+                    raise RuntimeError(f"下载后模型文件仍不完整: {self.model_path}")
+                
+                print(f"模型 {model_name} 已准备就绪")
+                
+            except Exception as e:
+                print(f"下载模型时发生错误: {e}")
+                raise RuntimeError(f"无法下载模型 {model_name}，请手动下载并放置到 {self.model_path}")
+
+        # 模型文件完整，正常加载
+        print(f"加载模型: {self.model_path}")
         self.model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
             self.model_path,
             device_map=device_map,
