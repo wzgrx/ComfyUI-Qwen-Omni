@@ -32,17 +32,22 @@ FLASH_ATTENTION_AVAILABLE = check_flash_attention()
 
 
 def init_qwen_paths():
-    """动态注册模型路径（支持ComfyUI模型管理）"""
-    qwen_dir = Path(folder_paths.models_dir) / "Qwen"
-    model_dir = qwen_dir / "Qwen2.5-Omni-7B"
-    model_dir.mkdir(parents=True, exist_ok=True)
+    """初始化模型路径，确保使用绝对路径"""
+    base_dir = Path(folder_paths.models_dir).resolve()
+    qwen_dir = base_dir / "Qwen" # 添加VLM子目录如 / "Qwen" / "VLM"
+    model_dir = qwen_dir / "Qwen2.5-Omni-7B"    
 
-    # 兼容ComfyUI新旧版本路径注册
+    
+    # 创建目录
+    model_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 注册到ComfyUI
     if hasattr(folder_paths, "add_model_folder_path"):
         folder_paths.add_model_folder_path("Qwen", str(model_dir))
     else:
         folder_paths.folder_names_and_paths["Qwen"] = ([str(model_dir)], {'.safetensors', '.bin'})
-
+    
+    print(f"模型路径已初始化: {model_dir}")
     return str(model_dir)
 
 
@@ -62,6 +67,29 @@ def test_download_speed(url):
     except Exception as e:
         print(f"测试下载速度时出现错误: {e}")
         return 0
+
+
+def validate_model_path(model_path):
+    """验证模型路径的有效性"""
+    path_obj = Path(model_path)
+    
+    # 基本检查
+    is_absolute = path_obj.is_absolute()
+    exists = path_obj.exists()
+    is_dir = path_obj.is_dir()
+    
+    # 文件数量检查
+    file_count = len(list(path_obj.glob("*"))) if exists else 0
+    
+    # 打印结果
+    print(f"路径验证: {model_path}")
+    print(f"  - 绝对路径: {is_absolute}")
+    print(f"  - 存在性: {exists}")
+    print(f"  - 是否为目录: {is_dir}")
+    print(f"  - 文件数量: {file_count}")
+    
+    return exists and is_dir and file_count > 0
+
 
 
 def check_model_files_exist(model_dir):
@@ -95,6 +123,9 @@ def check_model_files_exist(model_dir):
 class QwenOmniCombined:
     def __init__(self):
         self.model_path = init_qwen_paths()
+        self.cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+        print(f"模型路径: {self.model_path}")
+        print(f"缓存路径: {self.cache_dir}")
         self.model = None
         self.processor = None
         self.tokenizer = None
@@ -243,6 +274,15 @@ class QwenOmniCombined:
 
         # 自定义device_map，这里假设只有一个GPU，将模型尽可能放到GPU上
         device_map = {"": 0} if torch.cuda.device_count() > 0 else "auto"
+
+
+        # 验证路径
+        if not validate_model_path(self.model_path):
+            raise RuntimeError(f"无效的模型路径: {self.model_path}")
+        
+        # 检查模型文件
+        if not check_model_files_exist(self.model_path):
+            print(f"模型文件缺失，开始下载到缓存: {self.cache_dir}")
 
         # 检查模型文件是否齐全
         if check_model_files_exist(self.model_path):

@@ -1,5 +1,5 @@
 [project]
-name = "qwen-omni"
+name = "ComfyUI-Qwen-Omni"
 description =  """
 ComfyUI-Qwen-Omni is the first ComfyUI plugin supporting end-to-end multimodal interaction. 
 Integrating the Qwen2.5-Omni-7B large multimodal model, it enables seamless joint generation and editing of text, images, audio, and video within the ComfyUI framework. 
@@ -13,9 +13,19 @@ Key features:
 
 By processing multiple input modalities simultaneously, the plugin delivers unprecedented流畅体验 in AI content creation, from creative writing to voiceovers and visual editing. Ideal for artists, developers, and researchers exploring the frontiers of multimodal AI.
 """
-version = "0.1.0"
+version = "0.1.1"
 license = {file = "LICENSE"}
-dependencies = ["transformers>=4.52.0.dev0", "qwen_omni_utils", "numpy", "soundfile", "triton-windows", "modelscope"]
+dependencies = ["git+https://github.com/huggingface/transformers@v4.51.3-Qwen2.5-Omni-preview",
+"accelerate",
+"qwen_omni_utils",
+"numpy",
+"soundfile",
+"triton-windows",
+"modelscope",
+"bitsandbytes",
+"pillow",
+"numpy",
+"Requests]
 
 [project.urls]
 Repository = "https://github.com/SXQBW/ComfyUI-Qwen-Omni"
