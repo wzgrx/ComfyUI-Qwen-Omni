@@ -122,10 +122,17 @@ def check_model_files_exist(model_dir):
 
 class QwenOmniCombined:
     def __init__(self):
+        # 重置环境变量，避免干扰
+        os.environ.pop("HUGGINGFACE_HUB_CACHE", None)     
+
         self.model_path = init_qwen_paths()
         self.cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
         print(f"模型路径: {self.model_path}")
         print(f"缓存路径: {self.cache_dir}")
+        
+        # 验证并创建缓存目录
+        Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
+
         self.model = None
         self.processor = None
         self.tokenizer = None
@@ -280,14 +287,12 @@ class QwenOmniCombined:
         if not validate_model_path(self.model_path):
             raise RuntimeError(f"无效的模型路径: {self.model_path}")
         
-        # 检查模型文件
-        if not check_model_files_exist(self.model_path):
-            print(f"模型文件缺失，开始下载到缓存: {self.cache_dir}")
 
         # 检查模型文件是否齐全
         if check_model_files_exist(self.model_path):
             print("模型文件已存在且齐全，无需下载。")
         else:
+            print(f"模型文件缺失，开始下载到缓存: {self.cache_dir}")            
             # 测试下载速度
             huggingface_test_url = "https://huggingface.co/Qwen/Qwen2.5-Omni-7B/resolve/main/model-00005-of-00005.safetensors"
             modelscope_test_url = "https://modelscope.cn/api/v1/models/qwen/Qwen2.5-Omni-7B/repo?Revision=master&FilePath=model-00005-of-00005.safetensors"
@@ -308,20 +313,24 @@ class QwenOmniCombined:
             max_retries = 3
             for download_func, repo_id, source in download_sources:
                 for retry in range(max_retries):
-                    print(f"开始从 {source} 下载模型（第 {retry + 1} 次尝试）...")
                     try:
                         if download_func == snapshot_download:
-                            download_func(
+                            # 下载到缓存目录
+                            cached_path = download_func(
                                 repo_id,
-                                cache_dir=self.model_path,
+                                cache_dir=self.cache_dir,  # 修正为缓存目录
                                 ignore_patterns=["*.msgpack", "*.h5"]
                             )
                         else:
-                            download_func(
+                            cached_path = download_func(
                                 repo_id,
-                                cache_dir=self.model_path
+                                cache_dir=self.cache_dir  # 修正为缓存目录
                             )
-                        print(f"成功从 {source} 下载模型。")
+                        
+                        # 将下载的模型复制到模型目录
+                        self.copy_cached_model_to_local(cached_path, self.model_path)
+                        
+                        print(f"成功从 {source} 下载模型到 {self.model_path}")
                         break
                     except Exception as e:
                         if retry < max_retries - 1:
