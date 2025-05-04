@@ -321,6 +321,10 @@ class QwenOmniCombined:
                     print("基于下载速度分析，优先尝试从ModelScope下载")
 
                 max_retries = 3
+                success = False
+                final_error = None
+                used_cache_path = None
+
                 for download_func, repo_id, source in download_sources:
                     for retry in range(max_retries):
                         try:
@@ -336,20 +340,30 @@ class QwenOmniCombined:
                                     repo_id,
                                     cache_dir=self.cache_dir
                                 )
+
+                            used_cache_path = cached_path  # 记录使用的缓存路径
                             
                             # 将下载的模型复制到模型目录
                             self.copy_cached_model_to_local(cached_path, self.model_path)
                             
                             print(f"成功从 {source} 下载模型到 {self.model_path}")
+
+                            # 下载成功提示
+                            print("\n⚠️ 注意：模型下载过程中使用了缓存文件")
+                            print(f"缓存路径: {cached_path}")
+                            print("为避免占用额外硬盘空间，你可以在确认模型正常工作后删除此缓存目录")
+                            
+                            success = True
                             break
+
                         except Exception as e:
+                            final_error = e  # 保存最后一个错误
                             if retry < max_retries - 1:
                                 print(f"从 {source} 下载模型失败（第 {retry + 1} 次尝试）: {e}，即将进行下一次尝试...")
                             else:
                                 print(f"从 {source} 下载模型失败（第 {retry + 1} 次尝试）: {e}，尝试其他源...")
-                    else:
-                        continue
-                    break
+                    if success:
+                        break
                 else:
                     raise RuntimeError("从所有源下载模型均失败。")
                 
@@ -361,6 +375,13 @@ class QwenOmniCombined:
                 
             except Exception as e:
                 print(f"下载模型时发生错误: {e}")
+                
+                # 下载失败提示
+                if used_cache_path:
+                    print("\n⚠️ 注意：下载过程中创建了缓存文件")
+                    print(f"缓存路径: {used_cache_path}")
+                    print("你可以前往此路径删除缓存文件以释放硬盘空间")
+                
                 raise RuntimeError(f"无法下载模型 {model_name}，请手动下载并放置到 {self.model_path}")
 
         # 模型文件完整，正常加载
