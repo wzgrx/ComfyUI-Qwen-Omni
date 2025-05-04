@@ -20,6 +20,25 @@ import torchvision
 
 # 模型注册表 - 存储所有支持的模型版本信息
 MODEL_REGISTRY = {
+    "Qwen2.5-Omni-3B": {
+        "repo_id": {
+            "huggingface": "Qwen/Qwen2.5-Omni-3B",
+            "modelscope": "qwen/Qwen2.5-Omni-3B"
+        },
+        "required_files": [
+            "added_tokens.json", "chat_template.json", "merges.txt",
+            "model.safetensors.index.json", "preprocessor_config.json", 
+            "spk_dict.pt", "tokenizer.json", "vocab.json", "config.json",
+            "generation_config.json", "special_tokens_map.json",
+            "tokenizer_config.json",
+            # 3B模型分片为3个
+            "model-00001-of-00003.safetensors",
+            "model-00002-of-00003.safetensors",
+            "model-00003-of-00003.safetensors",
+        ],
+        "test_file": "model-00003-of-00003.safetensors",
+        "default": True
+    },
     "Qwen2.5-Omni-7B": {
         "repo_id": {
             "huggingface": "Qwen/Qwen2.5-Omni-7B",
@@ -39,25 +58,6 @@ MODEL_REGISTRY = {
             "model-00005-of-00005.safetensors",
         ],
         "test_file": "model-00005-of-00005.safetensors",
-        "default": True
-    },
-    "Qwen2.5-Omni-3B": {
-        "repo_id": {
-            "huggingface": "Qwen/Qwen2.5-Omni-3B",
-            "modelscope": "qwen/Qwen2.5-Omni-3B"
-        },
-        "required_files": [
-            "added_tokens.json", "chat_template.json", "merges.txt",
-            "model.safetensors.index.json", "preprocessor_config.json", 
-            "spk_dict.pt", "tokenizer.json", "vocab.json", "config.json",
-            "generation_config.json", "special_tokens_map.json",
-            "tokenizer_config.json",
-            # 3B模型可能分片为3个
-            "model-00001-of-00003.safetensors",
-            "model-00002-of-00003.safetensors",
-            "model-00003-of-00003.safetensors",
-        ],
-        "test_file": "model-00003-of-00003.safetensors",
         "default": False
     }
 }
@@ -385,6 +385,10 @@ class QwenOmniCombined:
 
         self.processor = AutoProcessor.from_pretrained(self.model_path, trust_remote_code=True)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
+
+        # 修复rope_scaling配置警告
+        if hasattr(self.model.config, "rope_scaling"):
+            self.model.config.rope_scaling["mrope_section"] = "none"  # 禁用 MROPE 优化
 
     def copy_cached_model_to_local(self, cached_path, target_path):
         """将缓存的模型文件复制到目标路径"""
@@ -715,7 +719,7 @@ class QwenOmniCombined:
                     ],
                     {
                         "default": "👍 4-bit (VRAM-friendly)",
-                        "tooltip": "Select the quantization level"
+                        "tooltip": "Select the quantization level:\n✅ 4-bit: Significantly reduces VRAM usage, suitable for resource-constrained environments.\n⚖️ 8-bit: Strikes a balance between precision and performance.\n🚫 None: Uses the original floating-point precision (requires a high-end GPU)."
                     }
                 ),
                 "prompt": (
@@ -723,7 +727,7 @@ class QwenOmniCombined:
                     {
                         "default": "Hi!😽",
                         "multiline": True,
-                        "tooltip": "Enter a text prompt"
+                        "tooltip": "Enter a text prompt, supporting Chinese and emojis. Example: 'Describe a cat in a painter's style.'"
                     }
                 ),
                 "audio_output": (
@@ -734,7 +738,7 @@ class QwenOmniCombined:
                     ],
                     {
                         "default": "🔇None (No Audio)",
-                        "tooltip": "Audio output options"
+                        "tooltip": "Audio output options:\n🔇 Do not generate audio.\n👱‍♀️ Use the female voice Chelsie (warm tone).\n👨‍🦰 Use the male voice Ethan (calm tone)."
                     }
                 ),
                 "audio_source": (
@@ -745,7 +749,7 @@ class QwenOmniCombined:
                     {
                         "default": "🎧 Separate Audio Input",
                         "display": "radio",
-                        "tooltip": "Select audio source"
+                        "tooltip": "Select audio source: Use video's built-in audio track (priority) / Input a separate audio file (external audio)"
                     }
                 ),
                 "max_tokens": (
@@ -756,7 +760,7 @@ class QwenOmniCombined:
                         "max": 2048,
                         "step": 16,
                         "display": "slider",
-                        "tooltip": "Control the maximum length of the generated text"
+                        "tooltip": "Control the maximum length of the generated text (in tokens). \nGenerally, 100 tokens correspond to approximately 50 - 100 Chinese characters or 67 - 100 English words, but the actual number may vary depending on the text content and the model's tokenization strategy. \nRecommended range: 64 - 512."
                     }
                 ),
                 "temperature": (
@@ -767,7 +771,7 @@ class QwenOmniCombined:
                         "max": 1.0,
                         "step": 0.1,
                         "display": "slider",
-                        "tooltip": "Control the generation diversity"
+                        "tooltip": "Control the generation diversity:\n▫️ 0.1 - 0.3: Generate structured/technical content.\n▫️ 0.5 - 0.7: Balance creativity and logic.\n▫️ 0.8 - 1.0: High degree of freedom (may produce incoherent content)."
                     }
                 ),
                 "top_p": (
@@ -778,7 +782,7 @@ class QwenOmniCombined:
                         "max": 1.0,
                         "step": 0.01,
                         "display": "slider",
-                        "tooltip": "Nucleus sampling threshold"
+                        "tooltip": "Nucleus sampling threshold:\n▪️ Close to 1.0: Retain more candidate words (more random).\n▪️ 0.5 - 0.8: Balance quality and diversity.\n▪️ Below 0.3: Generate more conservative content."
                     }
                 ),
                 "repetition_penalty": (
@@ -789,7 +793,7 @@ class QwenOmniCombined:
                         "max": 2.0,
                         "step": 0.01,
                         "display": "slider",
-                        "tooltip": "Control of repeated content"
+                        "tooltip": "Control of repeated content:\n⚠️ 1.0: Default behavior.\n⚠️ >1.0 (Recommended 1.2): Suppress repeated phrases.\n⚠️ <1.0 (Recommended 0.8): Encourage repeated emphasis."
                     }
                 )
             },
@@ -797,19 +801,19 @@ class QwenOmniCombined:
                 "image": (
                     "IMAGE",
                     {
-                        "tooltip": "Upload a reference image"
+                        "tooltip": "Upload a reference image (supports PNG/JPG), and the model will adjust the generation result based on the image content."
                     }
                 ),
                 "audio": (
                     "AUDIO",
                     {
-                        "tooltip": "Upload an audio file"
+                        "tooltip": "Upload an audio file (supports MP3/WAV), and the model will analyze the audio content and generate relevant responses."
                     }
                 ),
                 "video_path": (
                     "VIDEO_PATH",
                     {
-                        "tooltip": "Enter the video file path"
+                        "tooltip": "Enter the video file  (supports MP4/WEBM), and the model will extract visual features to assist in generation."
                     }
                 )
             }
