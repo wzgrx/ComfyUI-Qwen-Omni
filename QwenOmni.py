@@ -301,16 +301,24 @@ class QwenOmniCombined:
                 huggingface_speed = test_download_speed(huggingface_test_url)
                 modelscope_speed = test_download_speed(modelscope_test_url)
 
-                if huggingface_speed >= modelscope_speed:
+
+                print(f"Hugging Face下载速度: {huggingface_speed:.2f} KB/s")
+                print(f"ModelScope下载速度: {modelscope_speed:.2f} KB/s")
+
+                # 优化判断条件：只有当Hugging Face速度超过ModelScope 50%时才优先选择
+
+                if huggingface_speed > modelscope_speed * 1.5:
                     download_sources = [
                         (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face"),
                         (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope")
                     ]
+                    print("基于下载速度分析，优先尝试从Hugging Face下载")
                 else:
                     download_sources = [
                         (modelscope_snapshot_download, "qwen/Qwen2.5-Omni-7B", "ModelScope"),
                         (snapshot_download, "Qwen/Qwen2.5-Omni-7B", "Hugging Face")
                     ]
+                    print("基于下载速度分析，优先尝试从ModelScope下载")
 
                 max_retries = 3
                 for download_func, repo_id, source in download_sources:
