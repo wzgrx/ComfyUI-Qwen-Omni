@@ -141,6 +141,30 @@ class QwenOmniCombined:
         self.processor = None
         self.tokenizer = None
 
+
+    def copy_cached_model_to_local(self, cached_path, target_path):
+        """将缓存的模型文件复制到目标路径"""
+        print(f"正在将模型从缓存复制到: {target_path}")
+        target_path = Path(target_path)
+        target_path.mkdir(parents=True, exist_ok=True)
+        
+        # 使用shutil进行递归复制
+        import shutil
+        for item in Path(cached_path).iterdir():
+            if item.is_dir():
+                shutil.copytree(item, target_path / item.name, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, target_path / item.name)
+        
+        # 验证复制是否成功
+        if validate_model_path(target_path):
+            print(f"模型已成功复制到 {target_path}")
+        else:
+            raise RuntimeError(f"复制后模型文件仍不完整: {target_path}")
+
+
+
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -334,11 +358,15 @@ class QwenOmniCombined:
                                     repo_id,
                                     cache_dir=self.cache_dir,
                                     ignore_patterns=["*.msgpack", "*.h5"]
+                                    force_download=True,  # 强制重新下载
+                                    resume_download=True,  # 支持断点续传
+                                    timeout=300  # 设置超时时间为5分钟
                                 )
                             else:
                                 cached_path = download_func(
                                     repo_id,
                                     cache_dir=self.cache_dir
+                                    force=True  # ModelScope的强制下载参数
                                 )
 
                             used_cache_path = cached_path  # 记录使用的缓存路径
@@ -537,7 +565,7 @@ class QwenOmniCombined:
             except Exception as e:
                 print(f"Error deleting video audio temp file: {e}")
 
-        # 处理音频部分（不变）
+        # 处理音频部分
         if generate_config["return_audio"]:
             audio = audio_tensor
             if isinstance(audio, np.ndarray):
